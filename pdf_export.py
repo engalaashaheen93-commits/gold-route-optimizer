@@ -96,6 +96,37 @@ def generate_pdf(ranked: list, meta: dict) -> bytes:
         pdf.cell(0, 6, f"{r['cc_score']:.3f}", border=1, align="R", ln=True)
 
     pdf.ln(6)
+    # ── Full study: why each alternative was NOT chosen ──
+    pdf.set_font("Helvetica", "B", 12)
+    pdf.set_text_color(139, 38, 53)
+    pdf.cell(0, 8, "Alternatives Analysed (not selected)", ln=True)
+    pdf.set_text_color(30, 30, 30)
+    pdf.set_font("Helvetica", "", 9)
+    alts = [r for r in feasible if r["rank"] != 1]
+    for r in alts:
+        pdf.set_x(pdf.l_margin)
+        diff = r["cost"]["total"] - best["cost"]["total"]
+        slower = r["transit_h"] - best["transit_h"]
+        reason = []
+        if diff > 0:
+            reason.append(f"${diff:,.0f} more expensive")
+        if slower > 0:
+            reason.append(f"{slower:.0f}h slower")
+        if r["cc_score"] < best["cc_score"]:
+            reason.append(f"lower score ({r['cc_score']:.3f} vs {best['cc_score']:.3f})")
+        why = "; ".join(reason) if reason else "lower overall score"
+        pdf.set_font("Helvetica", "B", 9)
+        pdf.multi_cell(0, 5,
+            f"#{r['rank']} {r['mode'].title()} to {r['port']['en']}: "
+            f"${r['cost']['total']:,.0f}, {r['transit_h']:.0f}h", border=0)
+        pdf.set_font("Helvetica", "I", 9)
+        pdf.set_text_color(110, 110, 110)
+        pdf.set_x(pdf.l_margin)
+        pdf.multi_cell(0, 5, f"Not chosen: {why}.", border=0)
+        pdf.set_text_color(30, 30, 30)
+        pdf.ln(1)
+
+    pdf.ln(4)
     pdf.set_font("Helvetica", "I", 8)
     pdf.set_text_color(120, 120, 120)
     pdf.multi_cell(0, 5,
