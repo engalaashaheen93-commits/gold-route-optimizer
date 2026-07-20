@@ -83,6 +83,25 @@ def analyze(
         total = (freight_cost + cust["total_usd"] + sec["security_usd"]
                  + cargo_ins + ins_war["war_usd"] + lm["cost_usd"] + waiting_cost)
 
+        # ── transparency: how each figure was derived ──
+        from config import SECURITY_TIERS, SECURE_CARRIERS, AED
+        tinfo = SECURITY_TIERS[tier]
+        car = SECURE_CARRIERS[carrier]
+        calc = {
+            "freight": (f"{fr['per_kg']:.2f} USD/kg base x {gross_kg:.3f} kg"
+                        f" x {freight_mult:.2f} urgency"
+                        + (f" x {fr['market_pressure']:.2f} market" if fr['market_pressure'] != 1 else "")),
+            "war_ins": f"{value_usd:,.0f} value x {ins_war['war_rate']*100:.3f}% war-risk rate",
+            "cargo_ins": f"{value_usd:,.0f} value x {tinfo['insurance_pct']*100:.2f}% ({tier}-tier rate)",
+            "customs": f"{value_usd:,.0f} x {cust['rate']*100:.2f}% duty + {cust['handling']:,.0f} handling",
+            "security": (f"fixed {tinfo['security_fixed_aed']} AED + "
+                         f"{tinfo['handling_per_kg_aed']} AED/kg x {gross_kg:.3f} kg, /{AED} AED per USD"),
+            "last_mile": (f"{car['base_usd']} base + {car['per_km']}/km x {lm['km']}km + "
+                          f"{car['per_100k_value']} x ({value_usd:,.0f}/100k) + "
+                          f"{tinfo['dest_handling_aed']} AED handling"),
+            "waiting": f"{wait['wait_h']:.1f} h x 120 USD/h port waiting",
+        }
+
         metrics = {
             "shipping_cost": freight_cost,
             "insurance":     cargo_ins,
@@ -110,6 +129,7 @@ def analyze(
             "carrier":     carrier,
             "last_mile_km": lm["km"],
             "market_pressure": fr["market_pressure"],
+            "calc":        calc,
             "metrics":     metrics,
             "cost": {
                 "freight":   round(freight_cost, 2),
