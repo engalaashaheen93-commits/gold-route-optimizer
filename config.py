@@ -1,131 +1,349 @@
 """
-Route Analyzer.
-
-Given ONE origin and the user's preferred sea port + preferred airport,
-build the realistic options:
-  • SEA  → preferred sea port
-  • AIR  → preferred airport
-  • MULTIMODAL → preferred sea port (sea leg dominant)
-Compute full landed cost (freight + customs + tier security + tier insurance
-+ war-risk + secure last-mile to Gold Souk + waiting), then rank with TOPSIS
-and return best-first. The winner tells us BOTH the mode AND the arrival point.
+Configuration + bilingual (EN/AR) strings for Gold Route Optimizer.
+Works locally (.env) and on Streamlit Cloud (st.secrets).
 """
-from typing import List, Dict, Any
-from config import (ORIGINS, DEST_POINTS, WEIGHT_UNITS,
-                    SECURE_CARRIERS, last_mile_cost, tier_security,
-                    tier_insurance, select_tier)
-from providers import (
-    get_freight, get_customs, get_insurance,
-    get_geopolitical, get_weather, get_port_wait,
-)
-from topsis import run_topsis, confidence_score
+import os
+
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except Exception:
+    pass
 
 
-def compute_weight(qty: float, unit_key: str) -> dict:
-    u = WEIGHT_UNITS[unit_key]
-    grams_total = qty * u["grams"]
-    gross_kg = grams_total / 1000.0
-    pure_kg = gross_kg * u.get("purity", 0.9999)
-    return {"gross_kg": round(gross_kg, 4), "pure_kg": round(pure_kg, 4)}
+def _get(key: str, default: str = "") -> str:
+    try:
+        import streamlit as st
+        if hasattr(st, "secrets") and key in st.secrets:
+            return str(st.secrets[key])
+    except Exception:
+        pass
+    return os.getenv(key, default)
 
 
-def analyze(
-    origin_code: str,
-    pref_port: str,        # preferred SEA port  (JEA/RAS/HAM)
-    pref_airport: str,     # preferred AIRPORT   (DXB/SHJ/AUH)
-    value_usd: float,
-    qty: float,
-    unit_key: str,
-    escort: bool,
-    full_insurance: bool,
-    urgency: str,
-    carrier: str = "TRANSGUARD",
-) -> List[Dict[str, Any]]:
+ANTHROPIC_API_KEY   = _get("ANTHROPIC_API_KEY")
+OPENWEATHER_API_KEY = _get("OPENWEATHER_API_KEY")
+APP_MODE            = _get("APP_MODE", "hybrid")   # mock | hybrid | live
+DEFAULT_LANG        = _get("DEFAULT_LANG", "en")   # en | ar
 
-    w = compute_weight(qty, unit_key)
-    gross_kg = max(w["gross_kg"], 0.001)
-    o = ORIGINS[origin_code]
-    tier = select_tier(value_usd, escort, full_insurance)
+# ══════════════════════════════════════════════════════════════════
+# ORIGINS (Asia → Dubai)
+# ══════════════════════════════════════════════════════════════════
+ORIGINS = {
+    "PVG": {"en": "Shanghai",  "ar": "شنغهاي",    "city": "Shanghai",  "country": "CN", "flag": "🇨🇳"},
+    "HKG": {"en": "Hong Kong", "ar": "هونغ كونغ", "city": "Hong Kong", "country": "HK", "flag": "🇭🇰"},
+    "SIN": {"en": "Singapore", "ar": "سنغافورة",  "city": "Singapore", "country": "SG", "flag": "🇸🇬"},
+    "IST": {"en": "Istanbul",  "ar": "إسطنبول",   "city": "Istanbul",  "country": "TR", "flag": "🇹🇷"},
+}
 
-    if urgency == "urgent":
-        freight_mult, time_mult = 1.45, 0.75
-    elif urgency == "express":
-        freight_mult, time_mult = 1.15, 0.9
-    else:
-        freight_mult, time_mult = 1.0, 1.0
+# ══════════════════════════════════════════════════════════════════
+# DUBAI DESTINATION PORTS + onward delivery to Gold Souk (Deira)
+# last-mile cost is an estimate (USD) — editable
+# ══════════════════════════════════════════════════════════════════
+DEST_POINTS = {
+    # ── Sea ports ──
+    "JEA": {"en": "Jebel Ali Port",  "ar": "ميناء جبل علي", "type": "sea",
+            "souk_km": 45, "flag": "🚢"},
+    "RAS": {"en": "Port Rashid",     "ar": "ميناء راشد",    "type": "sea",
+            "souk_km": 12, "flag": "🚢"},
+    "HAM": {"en": "Hamriyah Port",   "ar": "ميناء الحمرية", "type": "sea",
+            "souk_km": 28, "flag": "🚢"},
+    # ── Airports ──
+    "DXB": {"en": "Dubai Intl Airport",   "ar": "مطار دبي الدولي",    "type": "air",
+            "souk_km": 8,  "flag": "✈️"},
+    "SHJ": {"en": "Sharjah Airport",      "ar": "مطار الشارقة",       "type": "air",
+            "souk_km": 22, "flag": "✈️"},
+    "AUH": {"en": "Zayed Intl (Abu Dhabi)", "ar": "مطار زايد (أبوظبي)", "type": "air",
+            "souk_km": 155, "flag": "✈️"},
+}
+# keep old name as alias so nothing breaks
+DUBAI_PORTS = DEST_POINTS
 
-    # define the option set: (mode, destination point)
-    plans = [
-        ("sea",        pref_port),
-        ("air",        pref_airport),
-        ("multimodal", pref_port),
-    ]
+# ══════════════════════════════════════════════════════════════════
+# SECURE INLAND CARRIERS (airport/port → Dubai Gold Souk)
+# specialised precious-metals transport & armed escort.
+# base_usd = fixed dispatch; per_km = armored-route rate;
+# per_100k_value = value-based security surcharge (per $100k insured).
+# Figures are realistic ESTIMATES — precise quotes are confidential.
+# ══════════════════════════════════════════════════════════════════
+SECURE_CARRIERS = {
+    "TRANSGUARD": {
+        "en": "Transguard", "ar": "ترانسجارد",
+        "base_usd": 260, "per_km": 6.5, "per_100k_value": 55,
+        "note_en": "Emirates Group · sole escort-authorised at DXB",
+        "note_ar": "مجموعة الإمارات · المرخّصة حصرياً في مطار دبي",
+    },
+    "BRINKS": {
+        "en": "Brink's", "ar": "برينكس",
+        "base_usd": 310, "per_km": 7.2, "per_100k_value": 62,
+        "note_en": "Global network · operates DMCC/Almas vault",
+        "note_ar": "شبكة عالمية · تدير خزائن DMCC/الماس",
+    },
+    "LOOMIS": {
+        "en": "Loomis", "ar": "لوميس",
+        "base_usd": 240, "per_km": 6.0, "per_100k_value": 50,
+        "note_en": "Bonded storage · DAFZA vault",
+        "note_ar": "تخزين جمركي · خزنة منطقة مطار دبي الحرة",
+    },
+    "ERBAY": {
+        "en": "Erbay", "ar": "إرباي",
+        "base_usd": 220, "per_km": 5.6, "per_100k_value": 46,
+        "note_en": "Regional secure logistics · competitive rates",
+        "note_ar": "خدمات لوجستية آمنة إقليمية · أسعار تنافسية",
+    },
+}
 
-    options = []
-    for mode, dest_code in plans:
-        dest = DEST_POINTS[dest_code]
-        fr = get_freight(origin_code, gross_kg, mode)
-        cust = get_customs(o["country"], value_usd, gross_kg)
-        ins_war = get_insurance(value_usd, full_insurance, origin_code)  # for war-risk only
-        geo = get_geopolitical(origin_code)
-        wx = get_weather(o["city"])
-        wait = get_port_wait(dest_code)
+# ══════════════════════════════════════════════════════════════════
+# 3-TIER SECURITY / HANDLING MODEL  (per uploaded matrix)
+# Amounts in USD (converted from AED at ~3.67).
+# The tier is auto-selected from shipment value & escort choice, and
+# drives insurance %, fixed security fee, per-kg handling, and
+# in-UAE destination handling fee.
+# ══════════════════════════════════════════════════════════════════
+AED = 3.6725   # USD per AED divisor  (1 USD ≈ 3.6725 AED)
 
-        # tier-based costs
-        sec = tier_security(gross_kg, tier)
-        cargo_ins = tier_insurance(value_usd, tier)
-        lm = last_mile_cost(dest_code, carrier, value_usd, tier)
+SECURITY_TIERS = {
+    "low": {
+        "en": "Low",  "ar": "منخفض",
+        "when_en": "Gold/Silver, organised delivery, no special escort",
+        "when_ar": "ذهب/فضة، تسليم منظّم، بدون حراسة خاصة",
+        "insurance_pct": 0.0020,          # 0.15–0.25% → mid 0.20%
+        "security_fixed_aed": 275,        # 150–400 AED
+        "handling_per_kg_aed": 13,        # 8–18 AED/kg
+        "dest_handling_aed": 75,          # 0–150 AED
+    },
+    "medium": {
+        "en": "Medium", "ar": "متوسط",
+        "when_en": "Higher value, airport/vault, secure handling",
+        "when_ar": "قيمة أعلى، مطار/مخزن، مناولة آمنة",
+        "insurance_pct": 0.0035,          # 0.25–0.45% → mid 0.35%
+        "security_fixed_aed": 600,        # 400–800 AED
+        "handling_per_kg_aed": 22,        # 15–30 AED/kg
+        "dest_handling_aed": 200,         # 100–300 AED
+    },
+    "high": {
+        "en": "High", "ar": "عالي",
+        "when_en": "High-value cargo, escort/vault/armored service",
+        "when_ar": "شحنة عالية القيمة، حراسة/خزنة/نقل مصفّح",
+        "insurance_pct": 0.0067,          # 0.45–0.90% → mid ~0.67%
+        "security_fixed_aed": 1150,       # 800–1500+ AED
+        "handling_per_kg_aed": 35,        # 25–50 AED/kg
+        "dest_handling_aed": 425,         # 250–600 AED
+    },
+}
 
-        freight_cost = fr["freight_usd"] * freight_mult
-        transit_h = fr["transit_h"] * time_mult + wait["wait_h"]
-        waiting_cost = wait["wait_h"] * 120
 
-        total = (freight_cost + cust["total_usd"] + sec["security_usd"]
-                 + cargo_ins + ins_war["war_usd"] + lm["cost_usd"] + waiting_cost)
+def select_tier(value_usd: float, escort: bool, full_insurance: bool) -> str:
+    """Auto-pick the security tier from shipment profile."""
+    if escort or value_usd >= 5_000_000:
+        return "high"
+    if full_insurance or value_usd >= 1_000_000:
+        return "medium"
+    return "low"
 
-        metrics = {
-            "shipping_cost": freight_cost,
-            "insurance":     cargo_ins,
-            "customs":       cust["total_usd"],
-            "security":      sec["security_usd"],
-            "transit_time":  transit_h,
-            "war_risk":      ins_war["war_usd"],
-            "weather_risk":  wx["score"] * 5000,
-            "geopolitical":  geo["score"] * 5000,
-            "last_mile":     lm["cost_usd"],
-        }
+# ══════════════════════════════════════════════════════════════════
+# METALS
+# ══════════════════════════════════════════════════════════════════
+METALS = {
+    "XAU": {"en": "Gold",      "ar": "ذهب",       "symbol": "XAU"},
+    "XAG": {"en": "Silver",    "ar": "فضة",       "symbol": "XAG"},
+    "XPT": {"en": "Platinum",  "ar": "بلاتينيوم", "symbol": "XPT"},
+    "XPD": {"en": "Palladium", "ar": "بالاديوم",  "symbol": "XPD"},
+}
 
-        options.append({
-            "origin_code": origin_code,
-            "origin":      o,
-            "dest_code":   dest_code,
-            "port":        dest,
-            "dest_type":   dest["type"],
-            "mode":        mode,
-            "feasible":    True,
-            "tier":        tier,
-            "weather":     wx,
-            "geo":         geo,
-            "weight":      w,
-            "carrier":     carrier,
-            "last_mile_km": lm["km"],
-            "market_pressure": fr["market_pressure"],
-            "metrics":     metrics,
-            "cost": {
-                "freight":   round(freight_cost, 2),
-                "customs":   round(cust["total_usd"], 2),
-                "security":  round(sec["security_usd"], 2),
-                "cargo_ins": round(cargo_ins, 2),
-                "war_ins":   round(ins_war["war_usd"], 2),
-                "last_mile": round(lm["cost_usd"], 2),
-                "waiting":   round(waiting_cost, 2),
-                "total":     round(total, 2),
-                "per_kg":    round(freight_cost / gross_kg, 2),
-            },
-            "transit_h": round(transit_h, 1),
-        })
+# ══════════════════════════════════════════════════════════════════
+# WEIGHT UNITS → grams
+# ══════════════════════════════════════════════════════════════════
+WEIGHT_UNITS = {
+    "oz":      {"en": "Troy Ounce",    "ar": "أونصة",         "grams": 31.1035, "purity": 0.9999},
+    "kg995":   {"en": "Kilogram 995",  "ar": "كيلوغرام 995",  "grams": 1000.0,  "purity": 0.995},
+    "kg_pure": {"en": "Kilogram Pure", "ar": "كيلوغرام خالص", "grams": 1000.0,  "purity": 0.9999},
+    "g":       {"en": "Gram",          "ar": "غرام",          "grams": 1.0,     "purity": 0.9999},
+}
 
-    ranked = run_topsis(options)
-    for r in ranked:
-        r["confidence"] = confidence_score(r)
-    return ranked
+# ══════════════════════════════════════════════════════════════════
+# TRANSPORT MODES — app compares ALL by default
+# ══════════════════════════════════════════════════════════════════
+MODES = ["air", "sea", "multimodal"]
+
+# ══════════════════════════════════════════════════════════════════
+# TOPSIS weights
+# ══════════════════════════════════════════════════════════════════
+TOPSIS_WEIGHTS = {
+    "shipping_cost":  0.24,
+    "insurance":      0.14,
+    "customs":        0.10,
+    "security":       0.14,
+    "transit_time":   0.20,
+    "war_risk":       0.05,
+    "weather_risk":   0.04,
+    "geopolitical":   0.05,
+    "last_mile":      0.04,
+}
+
+# ══════════════════════════════════════════════════════════════════
+# i18n — every UI string in EN + AR
+# ══════════════════════════════════════════════════════════════════
+T = {
+    "app_title":       {"en": "Gold Route Optimizer",            "ar": "محسّن مسارات الذهب"},
+    "app_subtitle":    {"en": "AI-powered route selection for precious-metals shipping · Asia to Dubai",
+                        "ar": "اختيار مسارات شحن المعادن الثمينة بالذكاء الاصطناعي · آسيا إلى دبي"},
+    "lang_button":     {"en": "🌐 العربية",                       "ar": "🌐 English"},
+    "mode_badge":      {"en": "Mode",                            "ar": "الوضع"},
+
+    "shipment":        {"en": "Shipment Details",                "ar": "بيانات الشحنة"},
+    "origin":          {"en": "Origin",                          "ar": "مصدر الشحنة"},
+    "destination":     {"en": "Dubai Destination Port",          "ar": "ميناء الوصول في دبي"},
+    "metal":           {"en": "Metal",                           "ar": "المعدن"},
+    "weight_qty":      {"en": "Quantity",                        "ar": "الكمية"},
+    "weight_unit":     {"en": "Unit",                            "ar": "الوحدة"},
+    "value":           {"en": "Shipment Value (USD)",            "ar": "قيمة الشحنة (دولار)"},
+    "value_help":      {"en": "Enter the insured value of the shipment",
+                        "ar": "أدخل القيمة المؤمّنة للشحنة"},
+    "depart_date":     {"en": "Requested Departure Date",        "ar": "تاريخ الانطلاق المطلوب"},
+    "arrive_date":     {"en": "Required Arrival Date",           "ar": "تاريخ الاستلام المطلوب"},
+    "urgency":         {"en": "Urgency Level",                   "ar": "مستوى الاستعجال"},
+    "escort":          {"en": "Armed Escort",                    "ar": "حراسة مسلحة"},
+    "full_insurance":  {"en": "Full Insurance Coverage",         "ar": "تغطية تأمينية كاملة"},
+    "analyze":         {"en": "🔍 Analyze All Routes",           "ar": "🔍 حلّل جميع المسارات"},
+
+    "urg_normal":      {"en": "Normal (7+ days)",                "ar": "عادي (7+ أيام)"},
+    "urg_express":     {"en": "Express (3-7 days)",              "ar": "مستعجل (3-7 أيام)"},
+    "urg_urgent":      {"en": "Critical (<48 h)",               "ar": "عاجل جداً (<48 ساعة)"},
+
+    "mode_air":        {"en": "Air",                             "ar": "جوي"},
+    "mode_sea":        {"en": "Sea",                             "ar": "بحري"},
+    "mode_multi":      {"en": "Multimodal",                      "ar": "متعدد الوسائط"},
+
+    "results":         {"en": "Results",                        "ar": "النتائج"},
+    "summary":         {"en": "Summary",                        "ar": "الملخص"},
+    "best_route":      {"en": "Best Route",                     "ar": "أفضل مسار"},
+    "lowest_cost":     {"en": "Lowest Cost",                    "ar": "أقل تكلفة"},
+    "transit":         {"en": "Transit Time",                   "ar": "زمن العبور"},
+    "topsis_score":    {"en": "TOPSIS Score",                   "ar": "درجة TOPSIS"},
+    "confidence":      {"en": "Confidence",                     "ar": "درجة الثقة"},
+    "all_options":     {"en": "All Route Options (ranked)",     "ar": "جميع الخيارات (مرتّبة)"},
+    "why_chosen":      {"en": "Why this route?",                "ar": "لماذا هذا المسار؟"},
+    "recommendation":  {"en": "AI Recommendation",              "ar": "توصية الذكاء الاصطناعي"},
+    "cost_breakdown":  {"en": "Cost Breakdown",                 "ar": "تفصيل التكلفة"},
+    "comparison":      {"en": "Route Comparison",               "ar": "مقارنة المسارات"},
+    "radar":           {"en": "Multi-Criteria Profile",        "ar": "الملف متعدد المعايير"},
+
+    "freight":         {"en": "Freight",                        "ar": "الشحن"},
+    "war_risk_ins":    {"en": "War-Risk Insurance",             "ar": "تأمين مخاطر الحرب"},
+    "insurance_item":  {"en": "Cargo Insurance",                "ar": "تأمين الشحنة"},
+    "customs_item":    {"en": "Customs & Clearance",            "ar": "الجمارك والتخليص"},
+    "security_item":   {"en": "Security & Escort",              "ar": "الأمن والحراسة"},
+    "last_mile_item":  {"en": "Delivery to Gold Souk",          "ar": "التوصيل لسوق الذهب"},
+    "waiting_item":    {"en": "Port Waiting",                   "ar": "انتظار الميناء"},
+    "total":           {"en": "Total",                          "ar": "الإجمالي"},
+    "per_kg":          {"en": "per kg",                         "ar": "لكل كغ"},
+    "hours":           {"en": "h",                              "ar": "ساعة"},
+    "days":            {"en": "d",                              "ar": "يوم"},
+    "points":          {"en": "pts",                            "ar": "نقطة"},
+    "rank":            {"en": "Rank",                           "ar": "الترتيب"},
+    "route_col":       {"en": "Route",                          "ar": "المسار"},
+    "mode_col":        {"en": "Mode",                           "ar": "الوسيلة"},
+    "weather":         {"en": "Weather",                        "ar": "الطقس"},
+
+    "risk_low":        {"en": "Low",                            "ar": "منخفض"},
+    "risk_med":        {"en": "Medium",                         "ar": "متوسط"},
+    "risk_high":       {"en": "High",                           "ar": "مرتفع"},
+
+    "data_sources":    {"en": "Data Sources",                   "ar": "مصادر البيانات"},
+    "live":            {"en": "LIVE",                           "ar": "حيّ"},
+    "estimated":       {"en": "Estimated",                      "ar": "تقديري"},
+    "src_metals":      {"en": "Metal Prices",                   "ar": "أسعار المعادن"},
+    "src_weather":     {"en": "Weather",                        "ar": "الطقس"},
+    "src_freight":     {"en": "Freight & Ports",                "ar": "الشحن والموانئ"},
+    "src_freight_note":{"en": "Commercial providers - simulated",
+                        "ar": "مزوّدوها تجاريون - محاكاة"},
+
+    "topsis_weights":  {"en": "TOPSIS Weights",                 "ar": "أوزان TOPSIS"},
+
+    "welcome_title":   {"en": "Start by entering shipment details",
+                        "ar": "ابدأ بإدخال بيانات الشحنة"},
+    "welcome_body":    {"en": "Fill in the form above and press Analyze. The system compares every route and mode using TOPSIS.",
+                        "ar": "املأ النموذج أعلاه واضغط تحليل. يقارن النظام كل المسارات والوسائل باستخدام TOPSIS."},
+
+    "export_pdf":      {"en": "📄 Export Report (PDF)",         "ar": "📄 تصدير التقرير (PDF)"},
+    "export_note":     {"en": "Report is generated in English.",
+                        "ar": "التقرير يُنشأ باللغة الإنجليزية."},
+
+    "gross_weight":    {"en": "Gross weight",                   "ar": "الوزن الإجمالي"},
+    "pure_weight":     {"en": "Pure content",                   "ar": "المحتوى الصافي"},
+
+    # secure carrier
+    "carrier":         {"en": "Secure Inland Carrier",          "ar": "شركة النقل الآمن الداخلي"},
+    "carrier_help":    {"en": "Specialised precious-metals transport & armed escort to the Gold Souk",
+                        "ar": "نقل مخصص للمعادن الثمينة مع حراسة مسلحة حتى سوق الذهب"},
+    "last_mile_full":  {"en": "Secure Delivery to Gold Souk",   "ar": "التوصيل الآمن لسوق الذهب"},
+    "distance":        {"en": "Distance",                       "ar": "المسافة"},
+    "km":              {"en": "km",                             "ar": "كم"},
+
+    # dual destination
+    "pref_port":       {"en": "Preferred Sea Port",             "ar": "ميناء الاستلام المرغوب"},
+    "pref_airport":    {"en": "Preferred Airport",              "ar": "مطار الاستلام المرغوب"},
+    "arrival_point":   {"en": "Arrival Point",                  "ar": "نقطة الوصول"},
+
+    # security tier
+    "sec_tier":        {"en": "Security Tier",                  "ar": "مستوى الأمان"},
+    "tier_low":        {"en": "Low",                            "ar": "منخفض"},
+    "tier_medium":     {"en": "Medium",                         "ar": "متوسط"},
+    "tier_high":       {"en": "High",                           "ar": "عالي"},
+    "auto_selected":   {"en": "auto-selected",                  "ar": "محدّد تلقائياً"},
+
+    # verdict banner
+    "verdict_title":   {"en": "Best Route Found",               "ar": "أفضل مسار"},
+    "via_sea":         {"en": "by SEA",                         "ar": "بحراً"},
+    "via_air":         {"en": "by AIR",                         "ar": "جواً"},
+    "via_multi":       {"en": "MULTIMODAL",                     "ar": "متعدد الوسائط"},
+    "verdict_because": {"en": "because its total cost is",      "ar": "لأن تكلفته الإجمالية"},
+    "vs_others":       {"en": "versus the alternatives",        "ar": "مقارنةً بالبدائل"},
+    "report_all":      {"en": "Full Report — All Options Analysed",
+                        "ar": "التقرير الكامل — دراسة كل الخيارات"},
+    "not_chosen":      {"en": "Alternatives not selected by the AI",
+                        "ar": "البدائل التي لم يخترها الذكاء الاصطناعي"},
+}
+
+
+def t(key: str, lang: str) -> str:
+    return T.get(key, {}).get(lang, T.get(key, {}).get("en", key))
+
+
+def name_of(d: dict, lang: str) -> str:
+    return d.get(lang, d.get("en", "?"))
+
+
+def last_mile_cost(dest_code: str, carrier_key: str, value_usd: float, tier: str) -> dict:
+    """
+    Secure inland transport from arrival point to Dubai Gold Souk,
+    using the chosen carrier + tier-based destination handling fee.
+    """
+    dest = DEST_POINTS[dest_code]
+    car = SECURE_CARRIERS[carrier_key]
+    tinfo = SECURITY_TIERS[tier]
+    km = dest["souk_km"]
+    transport = (car["base_usd"]
+                 + car["per_km"] * km
+                 + car["per_100k_value"] * (value_usd / 100_000))
+    dest_handling = tinfo["dest_handling_aed"] / AED
+    return {"cost_usd": round(transport + dest_handling, 2),
+            "transport_usd": round(transport, 2),
+            "dest_handling_usd": round(dest_handling, 2),
+            "km": km, "carrier": carrier_key}
+
+
+def tier_security(gross_kg: float, tier: str) -> dict:
+    """Fixed security fee + per-kg handling for a tier (USD)."""
+    tinfo = SECURITY_TIERS[tier]
+    fixed = tinfo["security_fixed_aed"] / AED
+    handling = tinfo["handling_per_kg_aed"] * gross_kg / AED
+    return {"security_usd": round(fixed + handling, 2),
+            "fixed_usd": round(fixed, 2),
+            "handling_usd": round(handling, 2)}
+
+
+def tier_insurance(value_usd: float, tier: str) -> float:
+    """Cargo insurance premium for a tier (USD)."""
+    return round(value_usd * SECURITY_TIERS[tier]["insurance_pct"], 2)
