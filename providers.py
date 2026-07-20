@@ -153,7 +153,8 @@ def get_customs(country: str, value_usd: float, gross_kg: float) -> dict:
     c = CUSTOMS.get(country, {"rate": 0.008, "complexity": 3, "handling": 700})
     duty = value_usd * c["rate"]
     total = duty + c["handling"]
-    return {"total_usd": round(total, 2), "complexity": c["complexity"]}
+    return {"total_usd": round(total, 2), "complexity": c["complexity"],
+            "rate": c["rate"], "handling": c["handling"]}
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -175,7 +176,7 @@ def get_insurance(value_usd: float, full_cover: bool, origin_code: str) -> dict:
     cargo = value_usd * cargo_rate
     war_rate = CORRIDOR.get(origin_code, {}).get("war", 0.0015)
     war = value_usd * war_rate
-    return {"cargo_usd": round(cargo, 2), "war_usd": round(war, 2)}
+    return {"cargo_usd": round(cargo, 2), "war_usd": round(war, 2), "war_rate": war_rate}
 
 
 # ══════════════════════════════════════════════════════════════════
