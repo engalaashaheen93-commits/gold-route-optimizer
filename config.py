@@ -107,28 +107,28 @@ SECURITY_TIERS = {
         "en": "Low",  "ar": "منخفض",
         "when_en": "Gold/Silver, organised delivery, no special escort",
         "when_ar": "ذهب/فضة، تسليم منظّم، بدون حراسة خاصة",
-        "insurance_pct": 0.0020,          # 0.15–0.25% → mid 0.20%
-        "security_fixed_aed": 275,        # 150–400 AED
-        "handling_per_kg_aed": 13,        # 8–18 AED/kg
-        "dest_handling_aed": 75,          # 0–150 AED
+        "insurance_pct": 0.0015,          # lower bound of 0.15–0.25%
+        "security_fixed_aed": 275,
+        "handling_per_kg_aed": 13,
+        "dest_handling_aed": 75,
     },
     "medium": {
         "en": "Medium", "ar": "متوسط",
         "when_en": "Higher value, airport/vault, secure handling",
         "when_ar": "قيمة أعلى، مطار/مخزن، مناولة آمنة",
-        "insurance_pct": 0.0035,          # 0.25–0.45% → mid 0.35%
-        "security_fixed_aed": 600,        # 400–800 AED
-        "handling_per_kg_aed": 22,        # 15–30 AED/kg
-        "dest_handling_aed": 200,         # 100–300 AED
+        "insurance_pct": 0.0025,          # lower bound of 0.25–0.45%
+        "security_fixed_aed": 600,
+        "handling_per_kg_aed": 22,
+        "dest_handling_aed": 200,
     },
     "high": {
         "en": "High", "ar": "عالي",
         "when_en": "High-value cargo, escort/vault/armored service",
         "when_ar": "شحنة عالية القيمة، حراسة/خزنة/نقل مصفّح",
-        "insurance_pct": 0.0067,          # 0.45–0.90% → mid ~0.67%
-        "security_fixed_aed": 1150,       # 800–1500+ AED
-        "handling_per_kg_aed": 35,        # 25–50 AED/kg
-        "dest_handling_aed": 425,         # 250–600 AED
+        "insurance_pct": 0.0045,          # lower bound of 0.45–0.90%
+        "security_fixed_aed": 1150,
+        "handling_per_kg_aed": 35,
+        "dest_handling_aed": 425,
     },
 }
 
