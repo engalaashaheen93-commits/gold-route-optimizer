@@ -165,43 +165,66 @@ with st.sidebar:
 # INPUT FORM
 # ══════════════════════════════════════════════════════════════════
 st.markdown(f"### 📦 {t('shipment',LANG)}")
-c1, c2, c3 = st.columns(3)
 
-with c1:
+# ── Row 1: Metal · Quantity · Unit ──
+r1c1, r1c2, r1c3 = st.columns(3)
+with r1c1:
+    metal = st.selectbox(t("metal", LANG), list(METALS.keys()),
+                         format_func=lambda k: name_of(METALS[k], LANG))
+with r1c2:
+    qty = st.number_input(t("weight_qty", LANG), min_value=0.1, value=50.0, step=0.5)
+with r1c3:
+    unit_key = st.selectbox(t("weight_unit", LANG), list(WEIGHT_UNITS.keys()),
+                            format_func=lambda k: name_of(WEIGHT_UNITS[k], LANG))
+w = compute_weight(qty, unit_key)
+st.caption(f"{t('gross_weight',LANG)}: {w['gross_kg']:.3f} kg · "
+           f"{t('pure_weight',LANG)}: {w['pure_kg']:.3f} kg")
+
+# ── Row 2: Origin · Departure · Arrival ──
+r2c1, r2c2, r2c3 = st.columns(3)
+with r2c1:
     origin_code = st.selectbox(
         t("origin", LANG), list(ORIGINS.keys()),
         format_func=lambda k: f"{ORIGINS[k]['flag']} {name_of(ORIGINS[k],LANG)}")
-    dest_port = st.selectbox(
-        t("destination", LANG), list(DUBAI_PORTS.keys()),
-        format_func=lambda k: f"{DUBAI_PORTS[k]['flag']} {name_of(DUBAI_PORTS[k],LANG)}")
-    metal = st.selectbox(
-        t("metal", LANG), list(METALS.keys()),
-        format_func=lambda k: name_of(METALS[k], LANG))
-
-with c2:
-    qty = st.number_input(t("weight_qty", LANG), min_value=0.1, value=50.0, step=0.5)
-    unit_key = st.selectbox(
-        t("weight_unit", LANG), list(WEIGHT_UNITS.keys()),
-        format_func=lambda k: name_of(WEIGHT_UNITS[k], LANG))
-    value_usd = st.number_input(t("value", LANG), min_value=1000, value=4800000,
-                                step=10000, format="%d", help=t("value_help", LANG))
-    w = compute_weight(qty, unit_key)
-    st.caption(f"{t('gross_weight',LANG)}: {w['gross_kg']:.3f} kg · "
-               f"{t('pure_weight',LANG)}: {w['pure_kg']:.3f} kg")
-
-with c3:
+with r2c2:
     depart = st.date_input(t("depart_date", LANG), value=date.today() + timedelta(days=3),
                            min_value=date.today())
+with r2c3:
     arrive = st.date_input(t("arrive_date", LANG), value=date.today() + timedelta(days=14),
                            min_value=date.today())
+
+# ── Row 3: Preferred Sea Port · Preferred Airport · Urgency ──
+SEA_PORTS = {k: v for k, v in DEST_POINTS.items() if v["type"] == "sea"}
+AIRPORTS = {k: v for k, v in DEST_POINTS.items() if v["type"] == "air"}
+r3c1, r3c2, r3c3 = st.columns(3)
+with r3c1:
+    pref_port = st.selectbox(
+        t("pref_port", LANG), list(SEA_PORTS.keys()),
+        format_func=lambda k: f"{DEST_POINTS[k]['flag']} {name_of(DEST_POINTS[k],LANG)}")
+with r3c2:
+    pref_airport = st.selectbox(
+        t("pref_airport", LANG), list(AIRPORTS.keys()),
+        format_func=lambda k: f"{DEST_POINTS[k]['flag']} {name_of(DEST_POINTS[k],LANG)}")
+with r3c3:
     urg_map = {"normal": t("urg_normal", LANG), "express": t("urg_express", LANG),
                "urgent": t("urg_urgent", LANG)}
     urgency = st.selectbox(t("urgency", LANG), list(urg_map.keys()),
                            format_func=lambda k: urg_map[k])
-    escort = st.toggle(t("escort", LANG), value=True)
-    full_ins = st.toggle(t("full_insurance", LANG), value=True)
 
-# secure inland carrier — full width row
+# ── Row 4 (centered): Shipment value ──
+_, vc, _ = st.columns([1, 2, 1])
+with vc:
+    value_usd = st.number_input(t("value", LANG), min_value=1000, value=4800000,
+                                step=10000, format="%d", help=t("value_help", LANG))
+
+# ── Row 5 (centered): Insurance · Escort toggles ──
+_, tc1, tc2, _ = st.columns([1, 1, 1, 1])
+with tc1:
+    full_ins = st.toggle(t("full_insurance", LANG), value=True)
+with tc2:
+    escort = st.toggle(t("escort", LANG), value=True)
+
+# ── Secure carrier row ──
 st.markdown(f"##### 🛡️ {t('carrier',LANG)}")
 cc_col1, cc_col2 = st.columns([2, 3])
 with cc_col1:
@@ -247,6 +270,27 @@ def badges_html(bl):
 def render_results(ranked):
     feasible = [r for r in ranked if r.get("feasible", True)]
     best = feasible[0]
+
+    # ---- VERDICT banner ----
+    via_map = {"sea": t("via_sea", LANG), "air": t("via_air", LANG),
+               "multimodal": t("via_multi", LANG)}
+    via = via_map[best["mode"]]
+    others = feasible[1:]
+    alt_costs = "، ".join(f"${r['cost']['total']:,.0f}" for r in others) if RTL else \
+                ", ".join(f"${r['cost']['total']:,.0f}" for r in others)
+    st.markdown(f"""
+    <div style='background:linear-gradient(135deg,#6E1E2A,#8B2635 55%,#3D2419);
+         border:2px solid #C9A24B;border-radius:14px;padding:20px 24px;margin:6px 0 16px 0;
+         box-shadow:0 4px 24px rgba(201,162,75,0.20);'>
+      <div style='font-size:13px;color:#E8C874;font-weight:700;letter-spacing:1px;'>
+        ★ {t('verdict_title',LANG)}</div>
+      <div style='font-size:24px;font-weight:800;color:#F0E6D2;margin:6px 0;'>
+        {via} · {best['origin']['flag']} {name_of(best['origin'],LANG)}
+        → {best['port']['flag']} {name_of(best['port'],LANG)}</div>
+      <div style='font-size:14px;color:#F0E6D2;opacity:0.9;'>
+        {t('verdict_because',LANG)} <b style='color:#E8C874;'>${best['cost']['total']:,.0f}</b>
+        {t('vs_others',LANG)}: <span style='color:#E8C874;'>{alt_costs}</span></div>
+    </div>""", unsafe_allow_html=True)
 
     # ---- KPI summary ----
     st.markdown(f"### 📊 {t('summary',LANG)}")
@@ -413,8 +457,8 @@ def _render_radar(feasible):
 # ══════════════════════════════════════════════════════════════════
 if analyze_clicked:
     with st.spinner("..."):
-        ranked = analyze(origin_code, dest_port, value_usd, qty, unit_key,
-                         escort, full_ins, urgency, carrier)
+        ranked = analyze(origin_code, pref_port, pref_airport, value_usd, qty,
+                         unit_key, escort, full_ins, urgency, carrier)
     st.session_state.ranked = ranked
 
 if "ranked" in st.session_state:
