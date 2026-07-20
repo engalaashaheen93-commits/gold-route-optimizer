@@ -51,25 +51,53 @@ def generate_pdf(ranked: list, meta: dict) -> bytes:
         f"{best['transit_h']:.0f}h transit  |  Confidence {best.get('confidence',0)}%")
     pdf.ln(3)
 
-    # cost breakdown of best
+    # ── Security tier explanation ──
+    tier = best.get("tier", "medium")
+    tier_names = {"low": "Low", "medium": "Medium", "high": "High"}
+    tier_rates = {"low": "0.15%", "medium": "0.25%", "high": "0.45%"}
+    tier_why = {
+        "low": "gold/silver, organised delivery, no special escort",
+        "medium": "higher value or full insurance selected",
+        "high": "armed escort selected or shipment value >= $5M",
+    }
     pdf.set_font("Helvetica", "B", 12)
-    pdf.cell(0, 8, "Cost Breakdown (Recommended)", ln=True)
-    pdf.set_font("Helvetica", "", 10)
-    for label, val in [
-        ("Freight", best["cost"]["freight"]),
-        ("War-Risk Insurance", best["cost"]["war_ins"]),
-        ("Cargo Insurance", best["cost"]["cargo_ins"]),
-        ("Customs & Clearance", best["cost"]["customs"]),
-        ("Security & Escort", best["cost"]["security"]),
-        ("Delivery to Gold Souk", best["cost"]["last_mile"]),
-        ("Port Waiting", best["cost"]["waiting"]),
-    ]:
-        pdf.cell(90, 6, label, border="B")
-        pdf.cell(0, 6, f"${val:,.2f}", border="B", ln=True,
-                 align="R")
+    pdf.set_text_color(139, 38, 53)
+    pdf.cell(0, 8, "Security Tier Applied", ln=True)
+    pdf.set_text_color(30, 30, 30)
+    pdf.set_font("Helvetica", "", 9)
+    pdf.set_x(pdf.l_margin)
+    pdf.multi_cell(0, 5,
+        f"Tier: {tier_names.get(tier,tier)} (auto-selected because {tier_why.get(tier,'')}). "
+        f"This tier sets the cargo-insurance rate at {tier_rates.get(tier,'')} of shipment value, "
+        f"plus fixed security and per-kg handling fees. Insurance and security scale with this tier.")
+    pdf.ln(3)
+
+    # cost breakdown of best — WITH formulas
+    pdf.set_font("Helvetica", "B", 12)
+    pdf.cell(0, 8, "Cost Breakdown with Calculations (Recommended)", ln=True)
+    calc = best.get("calc", {})
+    rows = [
+        ("Freight", best["cost"]["freight"], calc.get("freight", "")),
+        ("War-Risk Insurance", best["cost"]["war_ins"], calc.get("war_ins", "")),
+        ("Cargo Insurance", best["cost"]["cargo_ins"], calc.get("cargo_ins", "")),
+        ("Customs & Clearance", best["cost"]["customs"], calc.get("customs", "")),
+        ("Security & Escort", best["cost"]["security"], calc.get("security", "")),
+        ("Delivery to Gold Souk", best["cost"]["last_mile"], calc.get("last_mile", "")),
+        ("Port Waiting", best["cost"]["waiting"], calc.get("waiting", "")),
+    ]
+    for label, val, formula in rows:
+        pdf.set_x(pdf.l_margin)
+        pdf.set_font("Helvetica", "B", 9)
+        pdf.cell(70, 6, label, border="B")
+        pdf.cell(30, 6, f"${val:,.2f}", border="B", align="R")
+        pdf.set_font("Helvetica", "I", 7)
+        pdf.set_text_color(110, 110, 110)
+        pdf.multi_cell(0, 6, f"= {formula}" if formula else "", border="B")
+        pdf.set_text_color(30, 30, 30)
+    pdf.set_x(pdf.l_margin)
     pdf.set_font("Helvetica", "B", 10)
-    pdf.cell(90, 7, "TOTAL", border="B")
-    pdf.cell(0, 7, f"${best['cost']['total']:,.2f}", border="B", ln=True, align="R")
+    pdf.cell(70, 7, "TOTAL", border="B")
+    pdf.cell(30, 7, f"${best['cost']['total']:,.2f}", border="B", align="R", ln=True)
     pdf.ln(4)
 
     # all options table
