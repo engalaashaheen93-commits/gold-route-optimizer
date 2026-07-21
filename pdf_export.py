@@ -51,6 +51,28 @@ def generate_pdf(ranked: list, meta: dict) -> bytes:
         f"{best['transit_h']:.0f}h transit  |  Confidence {best.get('confidence',0)}%")
     pdf.ln(3)
 
+    # ── Data sources transparency ──
+    best_src = best.get("freight_source", "mock")
+    freight_live = best_src == "live"
+    pdf.set_font("Helvetica", "B", 12)
+    pdf.set_text_color(139, 38, 53)
+    pdf.cell(0, 8, "Data Sources", ln=True)
+    pdf.set_text_color(30, 30, 30)
+    pdf.set_font("Helvetica", "", 9)
+    pdf.set_x(pdf.l_margin)
+    pdf.multi_cell(0, 5,
+        "LIVE (free public sources): "
+        + ("freight rates via Freightos; " if freight_live else "")
+        + "metal spot prices via gold-api.com; weather via Open-Meteo.")
+    pdf.set_x(pdf.l_margin)
+    pdf.multi_cell(0, 5,
+        "Simulated (calibrated estimates): "
+        + ("" if freight_live else "freight rates; ")
+        + "customs, security, insurance and port waiting. Commercial providers for these "
+        "(SeaRates, Freightos subscription tiers, Shanghai Shipping Exchange) require paid "
+        "subscriptions, which is consistent with the data-privacy challenge noted by Sun et al. (2025).")
+    pdf.ln(3)
+
     # ── Security tier explanation ──
     tier = best.get("tier", "medium")
     tier_names = {"low": "Low", "medium": "Medium", "high": "High"}
