@@ -152,7 +152,12 @@ with st.sidebar:
 
     src_row(t("src_metals", LANG), metals_live, "gold-api.com")
     src_row(t("src_weather", LANG), APP_MODE in ("live", "hybrid"), "Open-Meteo")
-    src_row(t("src_freight", LANG), False, t("src_freight_note", LANG))
+    src_row(t("src_freight", LANG), APP_MODE in ("live", "hybrid"), "Freightos")
+    # required Freightos attribution
+    st.markdown(
+        "<div style='font-size:10px;color:#9A8A78;margin-top:2px;'>"
+        "Freight data by <a href='https://ship.freightos.com' target='_blank' "
+        "style='color:#C9A24B;'>Freightos</a></div>", unsafe_allow_html=True)
 
     st.markdown(f"### ⚖️ {t('topsis_weights',LANG)}")
     for c, w in TOPSIS_WEIGHTS.items():
