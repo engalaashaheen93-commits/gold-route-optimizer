@@ -137,12 +137,28 @@ def get_freight(origin_code: str, gross_kg: float, mode: str) -> dict:
         cost = ((base["air"] + base["sea"]) / 1.7) * gross_kg * variance * pressure
         hours = ((base["air_h"] + base["sea_d"] * 24) / 2.3)
 
+    freight_source = src
+    live_range = None
+
+    # ── LIVE freight from Freightos (free, no key) ──
+    if APP_MODE in ("live", "hybrid"):
+        try:
+            from freightos_rates import get_freight_quote
+            q = get_freight_quote(origin_code, gross_kg, mode)
+            if q and q["usd"] > 0:
+                cost = q["usd"]
+                freight_source = "live"
+                live_range = (q["min"], q["max"])
+        except Exception:
+            pass
+
     return {
         "freight_usd": round(cost, 2),
         "transit_h": round(hours, 1),
         "per_kg": round(cost / gross_kg, 2) if gross_kg else 0,
         "market_pressure": pressure,
-        "source": src,
+        "live_range": live_range,
+        "source": freight_source,
     }
 
 
