@@ -177,6 +177,18 @@ def generate_pdf(ranked: list, meta: dict) -> bytes:
         pdf.ln(1)
 
     pdf.ln(4)
+    # highlighted precious-metals cost-structure note
+    pdf.set_x(pdf.l_margin)
+    pdf.set_fill_color(245, 235, 220)
+    pdf.set_text_color(110, 30, 42)
+    pdf.set_font("Helvetica", "B", 9)
+    pdf.multi_cell(0, 5,
+        "Note: base freight is inherently low for small, high-value parcels; the bulk of the "
+        "cost lies in insurance and security - a defining characteristic of precious-metals "
+        "logistics.", border=1, fill=True)
+    pdf.ln(3)
+
+    pdf.set_x(pdf.l_margin)
     pdf.set_font("Helvetica", "I", 8)
     pdf.set_text_color(120, 120, 120)
     pdf.multi_cell(0, 5,
