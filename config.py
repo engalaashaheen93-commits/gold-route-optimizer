@@ -304,6 +304,11 @@ T = {
                         "ar": "التقرير الكامل — دراسة كل الخيارات"},
     "not_chosen":      {"en": "Alternatives not selected by the AI",
                         "ar": "البدائل التي لم يخترها الذكاء الاصطناعي"},
+    "pm_note":         {"en": "Note: base freight is inherently low for small, high-value parcels; "
+                              "the bulk of the cost lies in insurance and security — a defining "
+                              "characteristic of precious-metals logistics.",
+                        "ar": "ملاحظة: تكلفة الشحن الأساسية منخفضة بطبيعتها للطرود الصغيرة عالية القيمة؛ "
+                              "الجزء الأكبر من التكلفة يقع في التأمين والأمان — وهي خصيصة المعادن الثمينة."},
 }
 
 
