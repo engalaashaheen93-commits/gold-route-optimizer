@@ -37,6 +37,45 @@ ORIGINS = {
 }
 
 # ══════════════════════════════════════════════════════════════════
+# TRANSIT HUBS (transshipment points between origin and UAE)
+# sea + air hubs where cargo can be re-consolidated before Dubai.
+# ══════════════════════════════════════════════════════════════════
+TRANSIT_SEA = {
+    "SIN": {"en": "Singapore",   "ar": "سنغافورة",   "flag": "🇸🇬"},
+    "PUS": {"en": "Busan",       "ar": "بوسان",      "flag": "🇰🇷"},
+    "HKG": {"en": "Hong Kong",   "ar": "هونغ كونغ",  "flag": "🇭🇰"},
+    "CMB": {"en": "Colombo",     "ar": "كولومبو",    "flag": "🇱🇰"},
+    "PKG": {"en": "Port Klang",  "ar": "بورت كلانغ", "flag": "🇲🇾"},
+}
+TRANSIT_AIR = {
+    "SIN": {"en": "Singapore",   "ar": "سنغافورة",  "flag": "🇸🇬"},
+    "HKG": {"en": "Hong Kong",   "ar": "هونغ كونغ", "flag": "🇭🇰"},
+    "ICN": {"en": "Incheon",     "ar": "إنتشون",    "flag": "🇰🇷"},
+    "NRT": {"en": "Tokyo",       "ar": "طوكيو",     "flag": "🇯🇵"},
+}
+
+# ══════════════════════════════════════════════════════════════════
+# GEOPOLITICAL RISK by location (0=safe .. 1=high risk)
+# reflects corridor stability, conflict proximity, chokepoints.
+# Used to flag hazards and feed the decision.
+# ══════════════════════════════════════════════════════════════════
+GEO_RISK = {
+    # origins
+    "PVG": 0.20, "HKG": 0.22, "SIN": 0.10, "IST": 0.45,
+    # transit hubs
+    "PUS": 0.18, "CMB": 0.30, "PKG": 0.15, "ICN": 0.25, "NRT": 0.15,
+    # UAE arrival points (Strait of Hormuz proximity)
+    "JEA": 0.28, "RAS": 0.28, "HAM": 0.28, "DXB": 0.25, "SHJ": 0.25, "AUH": 0.22,
+}
+
+# cities to check live weather for each routing node
+NODE_CITY = {
+    "PVG": "Shanghai", "HKG": "Hong Kong", "SIN": "Singapore", "IST": "Istanbul",
+    "PUS": "Busan", "CMB": "Colombo", "PKG": "Kuala Lumpur", "ICN": "Seoul", "NRT": "Tokyo",
+    "JEA": "Dubai", "RAS": "Dubai", "HAM": "Dubai", "DXB": "Dubai", "SHJ": "Dubai", "AUH": "Dubai",
+}
+
+# ══════════════════════════════════════════════════════════════════
 # DUBAI DESTINATION PORTS + onward delivery to Gold Souk (Deira)
 # last-mile cost is an estimate (USD) — editable
 # ══════════════════════════════════════════════════════════════════
@@ -292,6 +331,10 @@ T = {
     "tier_medium":     {"en": "Medium",                         "ar": "متوسط"},
     "tier_high":       {"en": "High",                           "ar": "عالي"},
     "auto_selected":   {"en": "auto-selected",                  "ar": "محدّد تلقائياً"},
+    "auto_cheapest":   {"en": "Auto (cheapest carrier)",        "ar": "تلقائي (الأوفر)"},
+    "via_hub":         {"en": "via",                            "ar": "عبر"},
+    "direct":          {"en": "Direct",                         "ar": "مباشر"},
+    "routes_compared": {"en": "routes compared",                "ar": "مسار تمت مقارنته"},
 
     # verdict banner
     "verdict_title":   {"en": "Best Route Found",               "ar": "أفضل مسار"},
@@ -309,6 +352,16 @@ T = {
                               "characteristic of precious-metals logistics.",
                         "ar": "ملاحظة: تكلفة الشحن الأساسية منخفضة بطبيعتها للطرود الصغيرة عالية القيمة؛ "
                               "الجزء الأكبر من التكلفة يقع في التأمين والأمان — وهي خصيصة المعادن الثمينة."},
+
+    # hazards
+    "hazards":         {"en": "Risk Alerts",                    "ar": "تنبيهات المخاطر"},
+    "hz_geo":          {"en": "Geopolitical risk",              "ar": "خطر جيوسياسي"},
+    "hz_weather":      {"en": "Severe weather",                 "ar": "طقس سيّئ"},
+    "hz_none":         {"en": "No significant hazards on this route.",
+                        "ar": "لا مخاطر جوهرية على هذا المسار."},
+    "hz_at":           {"en": "at",                             "ar": "في"},
+    "hz_high":         {"en": "HIGH",                           "ar": "مرتفع"},
+    "hz_med":          {"en": "MODERATE",                       "ar": "متوسط"},
 }
 
 
