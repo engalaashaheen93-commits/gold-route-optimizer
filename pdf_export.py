@@ -86,9 +86,12 @@ def generate_pdf(ranked: list, meta: dict) -> bytes:
     pdf.multi_cell(0, 5,
         "Simulated (calibrated estimates): "
         + ("" if freight_live else "freight rates; ")
-        + "customs, security, insurance and port waiting. Commercial providers for these "
-        "(SeaRates, Freightos subscription tiers, Shanghai Shipping Exchange) require paid "
-        "subscriptions, which is consistent with the data-privacy challenge noted by Sun et al. (2025).")
+        + "customs, security, cargo & war-risk insurance, port waiting, and the inland secure-"
+        "transport rates of the four carriers (Transguard, Brink's, Loomis, Erbay). Precise "
+        "carrier pricing is confidential and quoted per shipment, so realistic estimates were "
+        "used. Commercial live-data providers for freight (SeaRates, Freightos subscription "
+        "tiers, Shanghai Shipping Exchange) require paid subscriptions, which is consistent "
+        "with the data-privacy challenge noted by Sun et al. (2025).")
     pdf.ln(3)
 
     # ── Security tier explanation ──
