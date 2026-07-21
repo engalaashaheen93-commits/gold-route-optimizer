@@ -379,6 +379,12 @@ def render_results(ranked):
     except Exception as e:
         st.caption(f"PDF: {e}")
 
+    # precious-metals cost-structure note
+    st.markdown(
+        f"<div style='background:#241812;border-{'right' if RTL else 'left'}:4px solid #8B2635;"
+        f"border-radius:8px;padding:12px 16px;margin-top:14px;color:#F0E6D2;font-size:13px;'>"
+        f"💡 {t('pm_note',LANG)}</div>", unsafe_allow_html=True)
+
 
 def _render_breakdown(r):
     car_name = name_of(SECURE_CARRIERS[r.get("carrier", "TRANSGUARD")], LANG)
