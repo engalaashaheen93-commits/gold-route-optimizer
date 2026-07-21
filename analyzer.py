@@ -88,9 +88,11 @@ def analyze(
         tinfo = SECURITY_TIERS[tier]
         car = SECURE_CARRIERS[carrier]
         calc = {
-            "freight": (f"{fr['per_kg']:.2f} USD/kg base x {gross_kg:.3f} kg"
-                        f" x {freight_mult:.2f} urgency"
-                        + (f" x {fr['market_pressure']:.2f} market" if fr['market_pressure'] != 1 else "")),
+            "freight": (
+                (f"LIVE Freightos quote (range ${fr['live_range'][0]:,.0f}-${fr['live_range'][1]:,.0f}), mid x {freight_mult:.2f} urgency"
+                 if fr.get("source") == "live" and fr.get("live_range")
+                 else f"{fr['per_kg']:.2f} USD/kg base x {gross_kg:.3f} kg x {freight_mult:.2f} urgency"
+                      + (f" x {fr['market_pressure']:.2f} market" if fr['market_pressure'] != 1 else ""))),
             "war_ins": f"{value_usd:,.0f} value x {ins_war['war_rate']*100:.3f}% war-risk rate",
             "cargo_ins": f"{value_usd:,.0f} value x {tinfo['insurance_pct']*100:.2f}% ({tier}-tier rate)",
             "customs": f"{value_usd:,.0f} x {cust['rate']*100:.2f}% duty + {cust['handling']:,.0f} handling",
@@ -129,6 +131,8 @@ def analyze(
             "carrier":     carrier,
             "last_mile_km": lm["km"],
             "market_pressure": fr["market_pressure"],
+            "freight_source": fr.get("source", "mock"),
+            "freight_range": fr.get("live_range"),
             "calc":        calc,
             "metrics":     metrics,
             "cost": {
