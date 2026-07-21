@@ -198,23 +198,23 @@ with r2c3:
     arrive = st.date_input(t("arrive_date", LANG), value=date.today() + timedelta(days=14),
                            min_value=date.today())
 
-# ── Row 3: Preferred Sea Port · Preferred Airport · Urgency ──
-SEA_PORTS = {k: v for k, v in DEST_POINTS.items() if v["type"] == "sea"}
-AIRPORTS = {k: v for k, v in DEST_POINTS.items() if v["type"] == "air"}
+# ── Row 3: Urgency · Carrier mode ──
 r3c1, r3c2, r3c3 = st.columns(3)
 with r3c1:
-    pref_port = st.selectbox(
-        t("pref_port", LANG), list(SEA_PORTS.keys()),
-        format_func=lambda k: f"{DEST_POINTS[k]['flag']} {name_of(DEST_POINTS[k],LANG)}")
-with r3c2:
-    pref_airport = st.selectbox(
-        t("pref_airport", LANG), list(AIRPORTS.keys()),
-        format_func=lambda k: f"{DEST_POINTS[k]['flag']} {name_of(DEST_POINTS[k],LANG)}")
-with r3c3:
     urg_map = {"normal": t("urg_normal", LANG), "express": t("urg_express", LANG),
                "urgent": t("urg_urgent", LANG)}
     urgency = st.selectbox(t("urgency", LANG), list(urg_map.keys()),
                            format_func=lambda k: urg_map[k])
+with r3c2:
+    # carrier: auto (cheapest) or a specific company
+    carrier_opts = ["auto"] + list(SECURE_CARRIERS.keys())
+    carrier_mode = st.selectbox(
+        t("carrier", LANG), carrier_opts,
+        format_func=lambda k: (t("auto_cheapest", LANG) if k == "auto"
+                               else name_of(SECURE_CARRIERS[k], LANG)))
+with r3c3:
+    st.markdown("<div style='height:28px;'></div>", unsafe_allow_html=True)
+    st.caption(f"🛡️ {t('carrier_help', LANG)}")
 
 # ── Row 4 (centered): Shipment value ──
 _, vc, _ = st.columns([1, 2, 1])
@@ -228,18 +228,6 @@ with tc1:
     full_ins = st.toggle(t("full_insurance", LANG), value=True)
 with tc2:
     escort = st.toggle(t("escort", LANG), value=True)
-
-# ── Secure carrier row ──
-st.markdown(f"##### 🛡️ {t('carrier',LANG)}")
-cc_col1, cc_col2 = st.columns([2, 3])
-with cc_col1:
-    carrier = st.selectbox(
-        t("carrier", LANG), list(SECURE_CARRIERS.keys()),
-        format_func=lambda k: name_of(SECURE_CARRIERS[k], LANG),
-        label_visibility="collapsed")
-with cc_col2:
-    st.caption(f"ℹ️ {name_of(SECURE_CARRIERS[carrier], LANG)} — "
-               f"{SECURE_CARRIERS[carrier]['note_'+LANG]}")
 
 analyze_clicked = st.button(t("analyze", LANG), type="primary", use_container_width=True)
 
@@ -280,7 +268,7 @@ def render_results(ranked):
     via_map = {"sea": t("via_sea", LANG), "air": t("via_air", LANG),
                "multimodal": t("via_multi", LANG)}
     via = via_map[best["mode"]]
-    others = feasible[1:]
+    others = feasible[1:4]
     alt_costs = "، ".join(f"${r['cost']['total']:,.0f}" for r in others) if RTL else \
                 ", ".join(f"${r['cost']['total']:,.0f}" for r in others)
     st.markdown(f"""
@@ -289,13 +277,38 @@ def render_results(ranked):
          box-shadow:0 4px 24px rgba(201,162,75,0.20);'>
       <div style='font-size:13px;color:#E8C874;font-weight:700;letter-spacing:1px;'>
         ★ {t('verdict_title',LANG)}</div>
-      <div style='font-size:24px;font-weight:800;color:#F0E6D2;margin:6px 0;'>
-        {via} · {best['origin']['flag']} {name_of(best['origin'],LANG)}
+      <div style='font-size:22px;font-weight:800;color:#F0E6D2;margin:6px 0;'>
+        {via} · {best['origin']['flag']} {name_of(best['origin'],LANG)}{best.get('hub_txt','')}
         → {best['port']['flag']} {name_of(best['port'],LANG)}</div>
+      <div style='font-size:13px;color:#E8C874;margin-bottom:4px;'>
+        🚚 {name_of(SECURE_CARRIERS[best['carrier']],LANG)} · {best['last_mile_km']} {t('km',LANG)} → {t('last_mile_full',LANG)}</div>
       <div style='font-size:14px;color:#F0E6D2;opacity:0.9;'>
         {t('verdict_because',LANG)} <b style='color:#E8C874;'>${best['cost']['total']:,.0f}</b>
         {t('vs_others',LANG)}: <span style='color:#E8C874;'>{alt_costs}</span></div>
+      <div style='font-size:11px;color:#9A8A78;margin-top:6px;'>
+        {len(feasible)} {t('routes_compared',LANG)}</div>
     </div>""", unsafe_allow_html=True)
+
+    # ---- HAZARD ALERTS for best route ----
+    hz = best.get("hazards", [])
+    if hz:
+        rows = ""
+        for h in hz:
+            icon = "🌪️" if h["type"] == "weather" else "⚠️"
+            label = t("hz_weather", LANG) if h["type"] == "weather" else t("hz_geo", LANG)
+            lvl = t("hz_high", LANG) if h["level"] == "high" else t("hz_med", LANG)
+            color = "#8B2635" if h["level"] == "high" else "#8B6F3A"
+            rows += (f"<div style='display:flex;gap:10px;align-items:center;margin:4px 0;'>"
+                     f"<span style='font-size:16px;'>{icon}</span>"
+                     f"<span style='background:{color};color:#F0E6D2;padding:1px 8px;"
+                     f"border-radius:8px;font-size:11px;font-weight:700;'>{lvl}</span>"
+                     f"<span style='color:#F0E6D2;font-size:13px;'>{label} {t('hz_at',LANG)} "
+                     f"<b>{h['where']}</b></span></div>")
+        st.markdown(
+            f"<div style='background:#241812;border:1px solid #8B2635;border-radius:12px;"
+            f"padding:12px 16px;margin-bottom:12px;'>"
+            f"<div style='color:#E8C874;font-weight:700;font-size:13px;margin-bottom:6px;'>"
+            f"🚨 {t('hazards',LANG)}</div>{rows}</div>", unsafe_allow_html=True)
 
     # ---- KPI summary ----
     st.markdown(f"### 📊 {t('summary',LANG)}")
@@ -325,18 +338,18 @@ def render_results(ranked):
     st.markdown(f"<div style='background:#241812;border-{'right' if RTL else 'left'}:4px solid #C9A24B;"
                 f"border-radius:8px;padding:14px 18px;'>{rec}</div>", unsafe_allow_html=True)
 
-    # ---- all options ranked ----
+    # ---- all options ranked (top 8 of many) ----
     st.markdown(f"### 🗺️ {t('all_options',LANG)}")
-    for r in feasible:
+    for r in feasible[:8]:
         cls = "route-card route-best" if r["rank"] == 1 else "route-card"
         wx_lvl = t(RISK_LABEL[r["weather"]["level"]], LANG)
         st.markdown(f"""
         <div class='{cls}'>
           <div style='display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;'>
             <div style='font-size:16px;font-weight:700;'>
-              #{r['rank']} · {r['origin']['flag']} {name_of(r['origin'],LANG)}
+              #{r['rank']} · {r['origin']['flag']} {name_of(r['origin'],LANG)}{r.get('hub_txt','')}
               → {r['port']['flag']} {name_of(r['port'],LANG)}
-              <span style='color:#9A8A78;font-size:13px;'>· {t(MODE_LABEL[r['mode']],LANG)}</span>
+              <span style='color:#9A8A78;font-size:13px;'>· {t(MODE_LABEL[r['mode']],LANG)} · 🚚 {name_of(SECURE_CARRIERS[r['carrier']],LANG)}</span>
             </div>
             <div>{badges_html(r.get('badges',[]))}</div>
           </div>
@@ -355,11 +368,11 @@ def render_results(ranked):
 
     # ---- comparison chart ----
     st.markdown(f"### 📊 {t('comparison',LANG)}")
-    _render_comparison(feasible)
+    _render_comparison(feasible[:6])
 
     # ---- radar ----
     st.markdown(f"### 🎯 {t('radar',LANG)}")
-    _render_radar(feasible)
+    _render_radar(feasible[:4])
 
     # ---- export ----
     st.markdown("---")
@@ -369,7 +382,7 @@ def render_results(ranked):
             "origin": name_of(best["origin"], "en"),
             "port": name_of(best["port"], "en"),
             "metal": name_of(METALS[metal], "en"),
-            "carrier": name_of(SECURE_CARRIERS[carrier], "en"),
+            "carrier": name_of(SECURE_CARRIERS[best["carrier"]], "en"),
             "value_usd": value_usd,
             "depart": str(depart), "arrive": str(arrive),
         })
@@ -468,8 +481,8 @@ def _render_radar(feasible):
 # ══════════════════════════════════════════════════════════════════
 if analyze_clicked:
     with st.spinner("..."):
-        ranked = analyze(origin_code, pref_port, pref_airport, value_usd, qty,
-                         unit_key, escort, full_ins, urgency, carrier)
+        ranked = analyze(origin_code, value_usd, qty, unit_key,
+                         escort, full_ins, urgency, carrier_mode)
     st.session_state.ranked = ranked
 
 if "ranked" in st.session_state:
