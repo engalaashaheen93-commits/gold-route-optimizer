@@ -1,23 +1,23 @@
 """
-Route Analyzer.
+Route Analyzer — door-to-door optimisation.
 
-Given ONE origin and the user's preferred sea port + preferred airport,
-build the realistic options:
-  • SEA  → preferred sea port
-  • AIR  → preferred airport
-  • MULTIMODAL → preferred sea port (sea leg dominant)
-Compute full landed cost (freight + customs + tier security + tier insurance
-+ war-risk + secure last-mile to Gold Souk + waiting), then rank with TOPSIS
-and return best-first. The winner tells us BOTH the mode AND the arrival point.
+Given ONE origin, the system automatically tries:
+  • every UAE arrival point (3 airports + 3 sea ports)
+  • direct legs AND one-transit-hub legs (transshipment)
+  • all 4 secure carriers for the inland leg to the Gold Souk
+and picks the cheapest complete door-to-door journey overall.
+
+Each option = international freight + (optional) transit + inland secure
+transport + tier insurance + tier security + war-risk + waiting.
+Ranked by TOPSIS. Insurance/security use the agreed 3-tier model.
 """
 from typing import List, Dict, Any
-from config import (ORIGINS, DEST_POINTS, WEIGHT_UNITS,
-                    SECURE_CARRIERS, last_mile_cost, tier_security,
-                    tier_insurance, select_tier)
-from providers import (
-    get_freight, get_customs, get_insurance,
-    get_geopolitical, get_weather, get_port_wait,
-)
+from config import (ORIGINS, DEST_POINTS, WEIGHT_UNITS, SECURE_CARRIERS,
+                    TRANSIT_SEA, TRANSIT_AIR, SECURITY_TIERS, AED,
+                    GEO_RISK, NODE_CITY,
+                    last_mile_cost, tier_security, tier_insurance, select_tier)
+from providers import (get_freight, get_customs, get_insurance,
+                       get_geopolitical, get_weather, get_port_wait)
 from topsis import run_topsis, confidence_score
 
 
@@ -29,17 +29,33 @@ def compute_weight(qty: float, unit_key: str) -> dict:
     return {"gross_kg": round(gross_kg, 4), "pure_kg": round(pure_kg, 4)}
 
 
+def _cheapest_carrier(dest_code, value_usd, tier):
+    """Pick the cheapest secure carrier for the inland leg to the Souk."""
+    best_key, best_lm = None, None
+    for ck in SECURE_CARRIERS:
+        lm = last_mile_cost(dest_code, ck, value_usd, tier)
+        if best_lm is None or lm["cost_usd"] < best_lm["cost_usd"]:
+            best_key, best_lm = ck, lm
+    return best_key, best_lm
+
+
+def _node_name(code):
+    """Human name for any routing node (origin/hub/dest)."""
+    for src in (ORIGINS, DEST_POINTS, TRANSIT_SEA, TRANSIT_AIR):
+        if code in src:
+            return src[code].get("en", code)
+    return code
+
+
 def analyze(
     origin_code: str,
-    pref_port: str,        # preferred SEA port  (JEA/RAS/HAM)
-    pref_airport: str,     # preferred AIRPORT   (DXB/SHJ/AUH)
     value_usd: float,
     qty: float,
     unit_key: str,
     escort: bool,
     full_insurance: bool,
     urgency: str,
-    carrier: str = "TRANSGUARD",
+    carrier_mode: str = "auto",   # "auto" = try all & pick cheapest, or a specific key
 ) -> List[Dict[str, Any]]:
 
     w = compute_weight(qty, unit_key)
@@ -48,61 +64,81 @@ def analyze(
     tier = select_tier(value_usd, escort, full_insurance)
 
     if urgency == "urgent":
-        freight_mult, time_mult = 1.45, 0.75
+        fmult, tmult = 1.45, 0.75
     elif urgency == "express":
-        freight_mult, time_mult = 1.15, 0.9
+        fmult, tmult = 1.15, 0.9
     else:
-        freight_mult, time_mult = 1.0, 1.0
+        fmult, tmult = 1.0, 1.0
 
-    # define the option set: (mode, destination point)
-    plans = [
-        ("sea",        pref_port),
-        ("air",        pref_airport),
-        ("multimodal", pref_port),
-    ]
+    cust = get_customs(o["country"], value_usd, gross_kg)
+    ins_war = get_insurance(value_usd, full_insurance, origin_code)
+    geo = get_geopolitical(origin_code)
+    wx = get_weather(o["city"])
+    cargo_ins = tier_insurance(value_usd, tier)
+    sec = tier_security(gross_kg, tier)
 
     options = []
-    for mode, dest_code in plans:
+
+    # airports vs sea ports in the UAE
+    air_points = [k for k, v in DEST_POINTS.items() if v["type"] == "air"]
+    sea_points = [k for k, v in DEST_POINTS.items() if v["type"] == "sea"]
+
+    def build(mode, dest_code, transit=None):
+        """Create one door-to-door option."""
         dest = DEST_POINTS[dest_code]
-        fr = get_freight(origin_code, gross_kg, mode)
-        cust = get_customs(o["country"], value_usd, gross_kg)
-        ins_war = get_insurance(value_usd, full_insurance, origin_code)  # for war-risk only
-        geo = get_geopolitical(origin_code)
-        wx = get_weather(o["city"])
         wait = get_port_wait(dest_code)
 
-        # tier-based costs
-        sec = tier_security(gross_kg, tier)
-        cargo_ins = tier_insurance(value_usd, tier)
-        lm = last_mile_cost(dest_code, carrier, value_usd, tier)
+        # ── collect the nodes this route passes through ──
+        nodes = [origin_code]
+        if transit:
+            nodes.append(transit)
+        nodes.append(dest_code)
 
-        freight_cost = fr["freight_usd"] * freight_mult
-        transit_h = fr["transit_h"] * time_mult + wait["wait_h"]
+        # ── hazard detection: geopolitical + severe weather ──
+        hazards = []
+        geo_max = 0.0
+        wx_max = wx["score"]
+        for nd in nodes:
+            g = GEO_RISK.get(nd, 0.2)
+            geo_max = max(geo_max, g)
+            if g >= 0.40:
+                nm = _node_name(nd)
+                hazards.append({"type": "geo", "level": "high" if g >= 0.5 else "med",
+                                "where": nm})
+            # live weather at this node
+            city = NODE_CITY.get(nd)
+            if city:
+                w2 = get_weather(city)
+                wx_max = max(wx_max, w2["score"])
+                if w2["score"] >= 0.55:
+                    hazards.append({"type": "weather", "level": "high",
+                                    "where": _node_name(nd)})
+                elif w2["score"] >= 0.30 and w2["level"] == "med":
+                    hazards.append({"type": "weather", "level": "med",
+                                    "where": _node_name(nd)})
+
+        # international freight (live via Freightos where possible)
+        fr = get_freight(origin_code, gross_kg, mode)
+        freight_cost = fr["freight_usd"] * fmult
+        transit_h = fr["transit_h"] * tmult
+
+        # add a transit-hub leg penalty (extra handling + time) if used
+        if transit:
+            freight_cost *= 1.18          # re-consolidation surcharge
+            transit_h += 36 if mode == "sea" else 8
+
+        transit_h += wait["wait_h"]
+
+        # inland secure transport — cheapest carrier (or fixed)
+        if carrier_mode == "auto":
+            carrier, lm = _cheapest_carrier(dest_code, value_usd, tier)
+        else:
+            carrier = carrier_mode
+            lm = last_mile_cost(dest_code, carrier, value_usd, tier)
+
         waiting_cost = wait["wait_h"] * 120
-
         total = (freight_cost + cust["total_usd"] + sec["security_usd"]
                  + cargo_ins + ins_war["war_usd"] + lm["cost_usd"] + waiting_cost)
-
-        # ── transparency: how each figure was derived ──
-        from config import SECURITY_TIERS, SECURE_CARRIERS, AED
-        tinfo = SECURITY_TIERS[tier]
-        car = SECURE_CARRIERS[carrier]
-        calc = {
-            "freight": (
-                (f"LIVE Freightos quote (range ${fr['live_range'][0]:,.0f}-${fr['live_range'][1]:,.0f}), mid x {freight_mult:.2f} urgency"
-                 if fr.get("source") == "live" and fr.get("live_range")
-                 else f"{fr['per_kg']:.2f} USD/kg base x {gross_kg:.3f} kg x {freight_mult:.2f} urgency"
-                      + (f" x {fr['market_pressure']:.2f} market" if fr['market_pressure'] != 1 else ""))),
-            "war_ins": f"{value_usd:,.0f} value x {ins_war['war_rate']*100:.3f}% war-risk rate",
-            "cargo_ins": f"{value_usd:,.0f} value x {tinfo['insurance_pct']*100:.2f}% ({tier}-tier rate)",
-            "customs": f"{value_usd:,.0f} x {cust['rate']*100:.2f}% duty + {cust['handling']:,.0f} handling",
-            "security": (f"fixed {tinfo['security_fixed_aed']} AED + "
-                         f"{tinfo['handling_per_kg_aed']} AED/kg x {gross_kg:.3f} kg, /{AED} AED per USD"),
-            "last_mile": (f"{car['base_usd']} base + {car['per_km']}/km x {lm['km']}km + "
-                          f"{car['per_100k_value']} x ({value_usd:,.0f}/100k) + "
-                          f"{tinfo['dest_handling_aed']} AED handling"),
-            "waiting": f"{wait['wait_h']:.1f} h x 120 USD/h port waiting",
-        }
 
         metrics = {
             "shipping_cost": freight_cost,
@@ -111,45 +147,61 @@ def analyze(
             "security":      sec["security_usd"],
             "transit_time":  transit_h,
             "war_risk":      ins_war["war_usd"],
-            "weather_risk":  wx["score"] * 5000,
-            "geopolitical":  geo["score"] * 5000,
+            "weather_risk":  wx_max * 5000,
+            "geopolitical":  geo_max * 5000,
             "last_mile":     lm["cost_usd"],
         }
 
-        options.append({
-            "origin_code": origin_code,
-            "origin":      o,
-            "dest_code":   dest_code,
-            "port":        dest,
-            "dest_type":   dest["type"],
-            "mode":        mode,
-            "feasible":    True,
-            "tier":        tier,
-            "weather":     wx,
-            "geo":         geo,
-            "weight":      w,
-            "carrier":     carrier,
-            "last_mile_km": lm["km"],
-            "market_pressure": fr["market_pressure"],
+        # route label
+        hub_txt = ""
+        if transit:
+            hub = (TRANSIT_AIR if mode == "air" else TRANSIT_SEA).get(transit, {})
+            hub_txt = f" via {hub.get('en','?')}"
+
+        return {
+            "origin_code": origin_code, "origin": o,
+            "dest_code": dest_code, "port": dest, "dest_type": dest["type"],
+            "mode": mode, "transit": transit, "hub_txt": hub_txt,
+            "feasible": True, "tier": tier, "weather": wx, "geo": geo,
+            "weight": w, "carrier": carrier, "last_mile_km": lm["km"],
             "freight_source": fr.get("source", "mock"),
             "freight_range": fr.get("live_range"),
-            "calc":        calc,
-            "metrics":     metrics,
+            "market_pressure": fr["market_pressure"],
+            "metrics": metrics,
+            "hazards": hazards,
+            "geo_risk": round(geo_max, 2),
+            "wx_risk": round(wx_max, 2),
             "cost": {
-                "freight":   round(freight_cost, 2),
-                "customs":   round(cust["total_usd"], 2),
-                "security":  round(sec["security_usd"], 2),
-                "cargo_ins": round(cargo_ins, 2),
-                "war_ins":   round(ins_war["war_usd"], 2),
-                "last_mile": round(lm["cost_usd"], 2),
-                "waiting":   round(waiting_cost, 2),
-                "total":     round(total, 2),
-                "per_kg":    round(freight_cost / gross_kg, 2),
+                "freight": round(freight_cost, 2), "customs": round(cust["total_usd"], 2),
+                "security": round(sec["security_usd"], 2), "cargo_ins": round(cargo_ins, 2),
+                "war_ins": round(ins_war["war_usd"], 2), "last_mile": round(lm["cost_usd"], 2),
+                "waiting": round(waiting_cost, 2), "total": round(total, 2),
+                "per_kg": round(freight_cost / gross_kg, 2),
             },
             "transit_h": round(transit_h, 1),
-        })
+        }
+
+    # ── DIRECT routes ──
+    for dc in air_points:
+        options.append(build("air", dc))
+    for dc in sea_points:
+        options.append(build("sea", dc))
+        options.append(build("multimodal", dc))
+
+    # ── VIA-TRANSIT routes (one hub) ──
+    for hub in TRANSIT_AIR:
+        if hub == origin_code:
+            continue
+        for dc in air_points:
+            options.append(build("air", dc, transit=hub))
+    for hub in TRANSIT_SEA:
+        if hub == origin_code:
+            continue
+        for dc in sea_points:
+            options.append(build("sea", dc, transit=hub))
 
     ranked = run_topsis(options)
     for r in ranked:
         r["confidence"] = confidence_score(r)
+    # keep the meaningful top set for display (all still available)
     return ranked
