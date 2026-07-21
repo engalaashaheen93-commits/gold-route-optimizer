@@ -20,20 +20,22 @@ BASE_FREIGHT = {
     "IST": {"air": 3.60, "sea": 1.05, "air_h": 6,  "sea_d": 11},   # Istanbul
 }
 
-# customs complexity & import handling per origin country
+# customs for INVESTMENT GOLD into Dubai (DMCC/free-zone):
+# investment-grade bullion is largely duty-exempt in the UAE; only a small
+# clearance/handling + documentation fee applies. rate is a tiny nominal %.
 CUSTOMS = {
-    "CN": {"rate": 0.008, "complexity": 4, "handling": 850},
-    "HK": {"rate": 0.004, "complexity": 2, "handling": 500},
-    "SG": {"rate": 0.005, "complexity": 2, "handling": 600},
-    "TR": {"rate": 0.012, "complexity": 3, "handling": 700},
+    "CN": {"rate": 0.0000, "complexity": 4, "handling": 850},
+    "HK": {"rate": 0.0000, "complexity": 2, "handling": 500},
+    "SG": {"rate": 0.0000, "complexity": 2, "handling": 600},
+    "TR": {"rate": 0.0005, "complexity": 3, "handling": 700},
 }
 
 # geopolitical corridor score 0..1 (higher = riskier) + war-risk premium %
 CORRIDOR = {
-    "PVG": {"geo": 0.20, "war": 0.0015},
-    "HKG": {"geo": 0.18, "war": 0.0012},
-    "SIN": {"geo": 0.12, "war": 0.0010},
-    "IST": {"geo": 0.45, "war": 0.0035},   # closer to conflict zones
+    "PVG": {"geo": 0.20, "war": 0.0004},
+    "HKG": {"geo": 0.18, "war": 0.0003},
+    "SIN": {"geo": 0.12, "war": 0.0002},
+    "IST": {"geo": 0.45, "war": 0.0012},   # closer to conflict zones
 }
 
 CITY_COORDS = {
