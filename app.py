@@ -8,7 +8,7 @@ import plotly.graph_objects as go
 
 from config import (ORIGINS, DEST_POINTS, METALS, WEIGHT_UNITS, APP_MODE,
                     DEFAULT_LANG, TOPSIS_WEIGHTS, SECURE_CARRIERS,
-                    shipment_value, t, name_of)
+                    shipment_value, PACKAGING_OPTIONS, t, name_of)
 DUBAI_PORTS = DEST_POINTS
 from analyzer import analyze, compute_weight
 from providers import get_metal_price
@@ -65,6 +65,10 @@ h1,h2,h3,h4,h5,p,div,span,label {{ color:#F0E6D2; }}
   border:1px solid #3D2419; border-radius:10px; padding:12px 14px; text-align:center; }}
 .kpi .v {{ color:#E8C874; font-size:22px; font-weight:800; }}
 .kpi .l {{ color:#9A8A78; font-size:12px; }}
+
+/* keep every widget label the same height so columns line up */
+[data-testid="stWidgetLabel"] p {{
+  min-height:2.4em; display:flex; align-items:flex-end; margin-bottom:0; }}
 
 /* primary button → gold gradient */
 .stButton button[kind="primary"] {{
@@ -172,8 +176,8 @@ with st.sidebar:
 # ══════════════════════════════════════════════════════════════════
 st.markdown(f"### 📦 {t('shipment',LANG)}")
 
-# ── Row 1: Metal · Quantity · Unit ──
-r1c1, r1c2, r1c3 = st.columns(3)
+# ── Row 1: Metal · Quantity · Unit · Packaging ──
+r1c1, r1c2, r1c3, r1c4 = st.columns(4)
 with r1c1:
     metal = st.selectbox(t("metal", LANG), list(METALS.keys()),
                          format_func=lambda k: name_of(METALS[k], LANG))
@@ -182,14 +186,22 @@ with r1c2:
 with r1c3:
     unit_key = st.selectbox(t("weight_unit", LANG), list(WEIGHT_UNITS.keys()),
                             format_func=lambda k: name_of(WEIGHT_UNITS[k], LANG))
-w = compute_weight(qty, unit_key)
+with r1c4:
+    packaging = st.selectbox(
+        t("packaging_type", LANG), list(PACKAGING_OPTIONS.keys()),
+        index=list(PACKAGING_OPTIONS.keys()).index("standard"),
+        format_func=lambda k: name_of(PACKAGING_OPTIONS[k], LANG),
+        help=t("packaging_help", LANG))
+w = compute_weight(qty, unit_key, packaging)
+pk = PACKAGING_OPTIONS[packaging]
 st.markdown(
     f"<div style='background:#241812;border-{'right' if RTL else 'left'}:4px solid #8B6F3A;"
     f"border-radius:8px;padding:10px 14px;margin:6px 0;color:#F0E6D2;font-size:13px;'>"
     f"⚖️ {t('net_weight',LANG)}: <b>{w['net_kg']:.3f} kg</b> · "
     f"{t('packaging',LANG)}: <b>+{w['packaging_kg']:.3f} kg</b> → "
     f"{t('gross_weight',LANG)}: <b style='color:#E8C874;'>{w['gross_kg']:.3f} kg</b>"
-    f"<div style='color:#9A8A78;font-size:11px;margin-top:4px;'>{t('weight_note',LANG)}</div>"
+    f"<div style='color:#9A8A78;font-size:11px;margin-top:4px;'>"
+    f"{name_of(pk,LANG)} — {pk['note_'+LANG]} · {t('weight_note',LANG)}</div>"
     f"</div>", unsafe_allow_html=True)
 
 # ── Row 2: Origin · Departure · Arrival ──
@@ -523,7 +535,7 @@ def _render_radar(feasible):
 if analyze_clicked:
     with st.spinner("..."):
         ranked = analyze(origin_code, value_usd, qty, unit_key,
-                         escort, full_ins, urgency, carrier_mode)
+                         escort, full_ins, urgency, carrier_mode, packaging)
     st.session_state.ranked = ranked
 
 if "ranked" in st.session_state:
