@@ -211,6 +211,7 @@ def get_geopolitical(origin_code: str) -> dict:
 # PORT WAITING  (Dubai side)
 # ══════════════════════════════════════════════════════════════════
 def get_port_wait(port_code: str) -> dict:
-    waits = {"JEA": 6, "HAM": 4, "DXB": 1}
+    waits = {"JEA": 6, "HAM": 4, "SHJP": 4, "KHL": 5, "ZYD": 5,
+             "KHR": 3, "FUJ": 3, "DXB": 1, "SHJ": 1, "AUH": 1}
     h = waits.get(port_code, 4) * random.uniform(0.8, 1.3)
     return {"wait_h": round(h, 1)}
