@@ -185,15 +185,11 @@ def analyze(
                  + cargo_cost + war_cost + lm_cost + waiting_cost)
 
         metrics = {
-            "shipping_cost": freight_cost,
-            "insurance":     cargo_cost,
-            "customs":       cust["total_usd"],
-            "security":      sec_cost,
+            "total_cost":    total,          # full landed cost — fair across pricing models
             "transit_time":  transit_h,
             "war_risk":      war_cost,
             "weather_risk":  wx_max * 5000,
             "geopolitical":  geo_max * 5000,
-            "last_mile":     lm_cost,
         }
 
         # route label
