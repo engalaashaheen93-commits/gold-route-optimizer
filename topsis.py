@@ -50,6 +50,27 @@ def run_topsis(options: list) -> list:
         opt["_d_best"] = d_best
         opt["_d_worst"] = d_worst
 
+        # ── per-criterion transparency ──
+        # For each criterion: how good is this option relative to the best and
+        # worst value observed on that criterion (1 = best, 0 = worst), plus the
+        # weighted contribution it makes to the final score.
+        detail = {}
+        for j, cname in enumerate(CRITERIA):
+            col = [row[j] for row in matrix]
+            lo, hi = min(col), max(col)
+            raw = matrix[i][j]
+            # all criteria are cost-type → lower is better
+            rel = 1.0 if hi == lo else (hi - raw) / (hi - lo)
+            detail[cname] = {
+                "raw": raw,
+                "score": round(rel, 4),                       # 0..1, higher = better
+                "weight": TOPSIS_WEIGHTS[cname],
+                "weighted": round(rel * TOPSIS_WEIGHTS[cname], 4),
+                "best": lo, "worst": hi,
+            }
+        opt["criteria_detail"] = detail
+        opt["weighted_sum"] = round(sum(d["weighted"] for d in detail.values()), 4)
+
     ranked = sorted(options, key=lambda o: o["cc_score"], reverse=True)
     for i, opt in enumerate(ranked):
         opt["rank"] = i + 1
