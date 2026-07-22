@@ -65,14 +65,18 @@ GEO_RISK = {
     # transit hubs
     "PUS": 0.18, "CMB": 0.30, "PKG": 0.15, "ICN": 0.25, "NRT": 0.15,
     # UAE arrival points (Strait of Hormuz proximity)
-    "JEA": 0.28, "HAM": 0.28, "DXB": 0.25, "SHJ": 0.25, "AUH": 0.22,
+    "JEA": 0.28, "HAM": 0.28, "SHJP": 0.28, "KHL": 0.24, "ZYD": 0.24,
+    "KHR": 0.20, "FUJ": 0.20,
+    "DXB": 0.25, "SHJ": 0.25, "AUH": 0.22,
 }
 
 # cities to check live weather for each routing node
 NODE_CITY = {
     "PVG": "Shanghai", "HKG": "Hong Kong", "SIN": "Singapore", "IST": "Istanbul",
     "PUS": "Busan", "CMB": "Colombo", "PKG": "Kuala Lumpur", "ICN": "Seoul", "NRT": "Tokyo",
-    "JEA": "Dubai", "HAM": "Dubai", "DXB": "Dubai", "SHJ": "Dubai", "AUH": "Dubai",
+    "JEA": "Dubai", "HAM": "Dubai", "SHJP": "Dubai", "KHL": "Dubai", "ZYD": "Dubai",
+    "KHR": "Dubai", "FUJ": "Dubai",
+    "DXB": "Dubai", "SHJ": "Dubai", "AUH": "Dubai",
 }
 
 # ══════════════════════════════════════════════════════════════════
@@ -85,6 +89,16 @@ DEST_POINTS = {
             "souk_km": 45, "flag": "🚢"},
     "HAM": {"en": "Hamriyah Port",   "ar": "ميناء الحمرية", "type": "sea",
             "souk_km": 28, "flag": "🚢"},
+    "SHJP": {"en": "Sharjah Port",   "ar": "ميناء الشارقة", "type": "sea",
+            "souk_km": 35, "flag": "🚢"},
+    "KHL": {"en": "Khalifa Port",    "ar": "ميناء خليفة",   "type": "sea",
+            "souk_km": 130, "flag": "🚢"},
+    "ZYD": {"en": "Zayed Port",      "ar": "ميناء زايد",    "type": "sea",
+            "souk_km": 150, "flag": "🚢"},
+    "KHR": {"en": "Khorfakkan Port", "ar": "ميناء خورفكان", "type": "sea",
+            "souk_km": 130, "flag": "🚢"},
+    "FUJ": {"en": "Fujairah Port",   "ar": "ميناء الفجيرة", "type": "sea",
+            "souk_km": 140, "flag": "🚢"},
     # ── Airports ──
     "DXB": {"en": "Dubai Intl Airport",   "ar": "مطار دبي الدولي",    "type": "air",
             "souk_km": 8,  "flag": "✈️"},
@@ -212,6 +226,24 @@ MODES = ["air", "sea", "multimodal"]
 # ══════════════════════════════════════════════════════════════════
 GRAMS_PER_OZ = 31.1035
 
+# Market convention for ounces per kilogram (used for pricing, not physics):
+#   pure (999.9) → 32.148 oz/kg
+#   995          → 31.99  oz/kg
+OZ_PER_KG_PURE = 32.148
+OZ_PER_KG_995  = 31.99
+
+# Market-standard ounces per kilogram, by purity (industry convention).
+# Used to convert a kg-entered quantity into billable/priced troy ounces.
+OZ_PER_KG = {
+    "pure": 32.148,    # 999.9 fine
+    "995":  31.990,    # 995 fine
+}
+
+# Packaging overhead: cartons, tape, plastic bags, sealing materials.
+# Carriers bill the FULL gross weight (packaging is charged as if it were gold).
+# Field figure: a 50 kg shipment gains ~300 g to 1.5 kg → ~0.6%–3%; using ~2%.
+PACKAGING_FACTOR = 1.02      # +2% over net metal weight
+
 AIR_OZ_PRICING = [
     # (max_gross_kg, door_to_door $/oz, door_to_airport $/oz)
     (50.0,  2.00, 1.50),
@@ -230,6 +262,77 @@ def air_oz_rate(gross_kg: float, service: str) -> float:
         if gross_kg <= max_kg:
             return dtd if service == "door_to_door" else dta
     return AIR_OZ_PRICING[-1][1 if service == "door_to_door" else 2]
+
+
+def priced_ounces(qty: float, unit_key: str) -> float:
+    """
+    Convert the user's quantity into PRICEABLE troy ounces using the
+    market convention (32.148 oz/kg pure, 31.99 oz/kg for 995).
+    """
+    u = WEIGHT_UNITS[unit_key]
+    if unit_key == "oz":
+        return qty
+    if unit_key == "kg995":
+        return qty * OZ_PER_KG_995
+    if unit_key == "kg_pure":
+        return qty * OZ_PER_KG_PURE
+    if unit_key == "g":
+        return (qty / 1000.0) * OZ_PER_KG_PURE
+    # fallback: physical conversion
+    return (qty * u["grams"]) / GRAMS_PER_OZ
+
+
+def shipment_value(qty: float, unit_key: str, fixing_per_oz: float,
+                   premium_per_oz: float = 0.0, extra_charges: float = 0.0) -> dict:
+    """
+    Shipment value = ounces x (fixing price + premium/discount) + extra charges.
+    premium_per_oz may be negative (a discount off the fixing).
+    """
+    oz = priced_ounces(qty, unit_key)
+    unit_price = fixing_per_oz + premium_per_oz
+    metal_value = oz * unit_price
+    total = metal_value + extra_charges
+    return {
+        "ounces": round(oz, 3),
+        "unit_price": round(unit_price, 3),
+        "metal_value": round(metal_value, 2),
+        "extra_charges": round(extra_charges, 2),
+        "total_value": round(total, 2),
+    }
+
+
+def priced_ounces(qty: float, unit_key: str) -> float:
+    """
+    Convert the user's entered quantity into PRICED troy ounces,
+    using the market conversion for the chosen unit/purity.
+    """
+    if unit_key == "kg995":
+        return qty * OZ_PER_KG["995"]
+    if unit_key == "kg_pure":
+        return qty * OZ_PER_KG["pure"]
+    if unit_key == "g":
+        return (qty / 1000.0) * OZ_PER_KG["pure"]
+    return qty          # already in troy ounces
+
+
+def shipment_value(qty: float, unit_key: str, fix_price_oz: float,
+                   premium_oz: float = 0.0, extra_charges: float = 0.0) -> dict:
+    """
+    Total shipment value the way the trade prices it:
+        ounces x (fix price + premium/discount per oz) + extra charges
+    premium_oz may be negative (a discount to the fix).
+    """
+    oz = priced_ounces(qty, unit_key)
+    unit_price = fix_price_oz + premium_oz
+    metal_value = oz * unit_price
+    total = metal_value + extra_charges
+    return {
+        "ounces": round(oz, 3),
+        "unit_price": round(unit_price, 3),
+        "metal_value": round(metal_value, 2),
+        "extra_charges": round(extra_charges, 2),
+        "total_value": round(total, 2),
+    }
 
 # ══════════════════════════════════════════════════════════════════
 # TOPSIS weights
@@ -335,7 +438,24 @@ T = {
     "export_note":     {"en": "Report is generated in English.",
                         "ar": "التقرير يُنشأ باللغة الإنجليزية."},
 
-    "gross_weight":    {"en": "Gross weight",                   "ar": "الوزن الإجمالي"},
+    "gross_weight":    {"en": "Billable weight",                "ar": "الوزن المحتسب"},
+    "net_weight":      {"en": "Net metal",                      "ar": "المعدن الصافي"},
+    "packaging":       {"en": "Packaging",                      "ar": "التغليف"},
+    "weight_note":     {"en": "Carriers bill the packed weight — cartons, tape and sealing are charged as if they were metal.",
+                        "ar": "الناقل يحتسب الوزن بعد التغليف — الكراتين واللاصق ومواد الإغلاق تُحسب كأنها معدن."},
+
+    # pricing inputs
+    "pricing":         {"en": "Shipment Pricing",               "ar": "تسعير الشحنة"},
+    "fix_price":       {"en": "Fix Price (USD/oz)",             "ar": "سعر التثبيت (دولار/أونصة)"},
+    "fix_help":        {"en": "The locked metal price per troy ounce",
+                        "ar": "سعر المعدن المثبّت لكل أونصة"},
+    "premium":         {"en": "Premium / Discount (USD/oz)",    "ar": "البريميوم / الخصم (دولار/أونصة)"},
+    "premium_help":    {"en": "Added to (or subtracted from) the fix price; use a negative number for a discount",
+                        "ar": "يُضاف إلى سعر التثبيت أو يُطرح منه؛ استخدم رقماً سالباً للخصم"},
+    "extras":          {"en": "Extra Charges (USD)",            "ar": "رسوم إضافية (دولار)"},
+    "extras_help":     {"en": "Any additional charges on the shipment",
+                        "ar": "أي رسوم إضافية على الشحنة"},
+    "oz_unit":         {"en": "oz",                             "ar": "أونصة"},
     "pure_weight":     {"en": "Pure content",                   "ar": "المحتوى الصافي"},
 
     # secure carrier
