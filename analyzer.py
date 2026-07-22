@@ -22,22 +22,24 @@ from providers import (get_freight, get_customs, get_insurance,
 from topsis import run_topsis, confidence_score
 
 
-def compute_weight(qty: float, unit_key: str) -> dict:
+def compute_weight(qty: float, unit_key: str, packaging: str = "standard") -> dict:
     """
     Net metal weight, plus the packed (billable) weight.
     Carriers charge on the packed gross weight — cartons, tape, bags and
     sealing all get billed as if they were gold.
     """
-    from config import PACKAGING_FACTOR
+    from config import PACKAGING_OPTIONS
     u = WEIGHT_UNITS[unit_key]
+    factor = PACKAGING_OPTIONS.get(packaging, PACKAGING_OPTIONS["standard"])["factor"]
     grams_total = qty * u["grams"]
     net_kg = grams_total / 1000.0
     pure_kg = net_kg * u.get("purity", 0.9999)
-    packed_kg = net_kg * PACKAGING_FACTOR
+    packed_kg = net_kg * factor
     return {"gross_kg": round(packed_kg, 4),      # billable weight
             "net_kg": round(net_kg, 4),           # metal only
             "pure_kg": round(pure_kg, 4),
-            "packaging_kg": round(packed_kg - net_kg, 4)}
+            "packaging_kg": round(packed_kg - net_kg, 4),
+            "packaging": packaging}
 
 
 def _cheapest_carrier(dest_code, value_usd, tier):
@@ -67,9 +69,10 @@ def analyze(
     full_insurance: bool,
     urgency: str,
     carrier_mode: str = "auto",   # "auto" = try all & pick cheapest, or a specific key
+    packaging: str = "standard",
 ) -> List[Dict[str, Any]]:
 
-    w = compute_weight(qty, unit_key)
+    w = compute_weight(qty, unit_key, packaging)
     gross_kg = max(w["gross_kg"], 0.001)
     o = ORIGINS[origin_code]
     tier = select_tier(value_usd, escort, full_insurance)
