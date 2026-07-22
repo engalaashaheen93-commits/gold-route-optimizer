@@ -426,6 +426,13 @@ T = {
     "recommendation":  {"en": "AI Recommendation",              "ar": "توصية الذكاء الاصطناعي"},
     "cost_breakdown":  {"en": "Cost Breakdown",                 "ar": "تفصيل التكلفة"},
     "comparison":      {"en": "Route Comparison",               "ar": "مقارنة المسارات"},
+    "chart_tradeoff":  {"en": "Cost vs Time Trade-off",         "ar": "المفاضلة بين التكلفة والزمن"},
+    "chart_topn":      {"en": "Top Routes by Total Cost",       "ar": "أفضل المسارات حسب التكلفة"},
+    "chart_score":     {"en": "Score Composition",              "ar": "تركيب درجة التقييم"},
+    "chart_hint_scatter": {"en": "Each point is a route. The star is the recommendation — closest to the bottom-left (cheap and fast).",
+                           "ar": "كل نقطة مسار. النجمة هي التوصية — الأقرب لأسفل اليسار (أوفر وأسرع)."},
+    "chart_hint_stack":   {"en": "Each segment shows how much a criterion contributed to that route's score.",
+                           "ar": "كل جزء يبيّن مقدار مساهمة المعيار في درجة المسار."},
     "radar":           {"en": "Multi-Criteria Profile",        "ar": "الملف متعدد المعايير"},
 
     "freight":         {"en": "Freight",                        "ar": "الشحن"},
