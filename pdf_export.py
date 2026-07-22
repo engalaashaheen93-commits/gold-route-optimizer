@@ -3,7 +3,6 @@ PDF report generator (English) for the ranked route analysis.
 """
 from fpdf import FPDF
 
-
 def generate_pdf(ranked: list, meta: dict) -> bytes:
     feasible = [r for r in ranked if r.get("feasible", True)]
     best = feasible[0]
