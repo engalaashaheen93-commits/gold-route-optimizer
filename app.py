@@ -251,6 +251,17 @@ MODE_LABEL = {"air": "mode_air", "sea": "mode_sea", "multimodal": "mode_multi"}
 RISK_LABEL = {"low": "risk_low", "med": "risk_med", "high": "risk_high"}
 
 
+def carrier_label(r):
+    """Display label for the inland carrier / service type."""
+    c = r.get("carrier", "TRANSGUARD")
+    svc = r.get("service")
+    if c == "INCLUDED" or svc == "door_to_door":
+        return f"{t('svc_d2d',LANG)} ({t('svc_included',LANG)})"
+    if c == "FLAT95" or svc == "door_to_airport":
+        return f"{t('svc_d2a',LANG)} ({t('svc_flat',LANG)})"
+    return name_of(SECURE_CARRIERS[c], LANG)
+
+
 def badges_html(bl):
     out = ""
     for b in bl:
@@ -281,7 +292,7 @@ def render_results(ranked):
         {via} · {best['origin']['flag']} {name_of(best['origin'],LANG)}{best.get('hub_txt','')}
         → {best['port']['flag']} {name_of(best['port'],LANG)}</div>
       <div style='font-size:13px;color:#E8C874;margin-bottom:4px;'>
-        🚚 {name_of(SECURE_CARRIERS[best['carrier']],LANG)} · {best['last_mile_km']} {t('km',LANG)} → {t('last_mile_full',LANG)}</div>
+        🚚 {carrier_label(best)} · {best['last_mile_km']} {t('km',LANG)} → {t('last_mile_full',LANG)}</div>
       <div style='font-size:14px;color:#F0E6D2;opacity:0.9;'>
         {t('verdict_because',LANG)} <b style='color:#E8C874;'>${best['cost']['total']:,.0f}</b>
         {t('vs_others',LANG)}: <span style='color:#E8C874;'>{alt_costs}</span></div>
@@ -349,7 +360,7 @@ def render_results(ranked):
             <div style='font-size:16px;font-weight:700;'>
               #{r['rank']} · {r['origin']['flag']} {name_of(r['origin'],LANG)}{r.get('hub_txt','')}
               → {r['port']['flag']} {name_of(r['port'],LANG)}
-              <span style='color:#9A8A78;font-size:13px;'>· {t(MODE_LABEL[r['mode']],LANG)} · 🚚 {name_of(SECURE_CARRIERS[r['carrier']],LANG)}</span>
+              <span style='color:#9A8A78;font-size:13px;'>· {t(MODE_LABEL[r['mode']],LANG)} · 🚚 {carrier_label(r)}</span>
             </div>
             <div>{badges_html(r.get('badges',[]))}</div>
           </div>
@@ -382,7 +393,10 @@ def render_results(ranked):
             "origin": name_of(best["origin"], "en"),
             "port": name_of(best["port"], "en"),
             "metal": name_of(METALS[metal], "en"),
-            "carrier": name_of(SECURE_CARRIERS[best["carrier"]], "en"),
+            "carrier": (name_of(SECURE_CARRIERS[best["carrier"]], "en")
+                        if best["carrier"] in SECURE_CARRIERS
+                        else ("All-inclusive (Door-to-Door)" if best.get("service") == "door_to_door"
+                              else "Door-to-Airport + inland secure leg")),
             "value_usd": value_usd,
             "depart": str(depart), "arrive": str(arrive),
         })
@@ -400,7 +414,7 @@ def render_results(ranked):
 
 
 def _render_breakdown(r):
-    car_name = name_of(SECURE_CARRIERS[r.get("carrier", "TRANSGUARD")], LANG)
+    car_name = carrier_label(r)
     lm_label = (f"{t('last_mile_item',LANG)} · {car_name} "
                 f"({r.get('last_mile_km','?')} {t('km',LANG)})")
     items = [
