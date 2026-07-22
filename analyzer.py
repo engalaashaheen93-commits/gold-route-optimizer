@@ -14,7 +14,8 @@ Ranked by TOPSIS. Insurance/security use the agreed 3-tier model.
 from typing import List, Dict, Any
 from config import (ORIGINS, DEST_POINTS, WEIGHT_UNITS, SECURE_CARRIERS,
                     TRANSIT_SEA, TRANSIT_AIR, SECURITY_TIERS, AED,
-                    GEO_RISK, NODE_CITY,
+                    GEO_RISK, NODE_CITY, GRAMS_PER_OZ, AIR_OZ_PRICING,
+                    INLAND_SECURE_FLAT_USD, air_oz_rate,
                     last_mile_cost, tier_security, tier_insurance, select_tier)
 from providers import (get_freight, get_customs, get_insurance,
                        get_geopolitical, get_weather, get_port_wait)
@@ -83,7 +84,7 @@ def analyze(
     air_points = [k for k, v in DEST_POINTS.items() if v["type"] == "air"]
     sea_points = [k for k, v in DEST_POINTS.items() if v["type"] == "sea"]
 
-    def build(mode, dest_code, transit=None):
+    def build(mode, dest_code, transit=None, service="door_to_door"):
         """Create one door-to-door option."""
         dest = DEST_POINTS[dest_code]
         wait = get_port_wait(dest_code)
@@ -117,39 +118,68 @@ def analyze(
                     hazards.append({"type": "weather", "level": "med",
                                     "where": _node_name(nd)})
 
-        # international freight (live via Freightos where possible)
-        fr = get_freight(origin_code, gross_kg, mode)
-        freight_cost = fr["freight_usd"] * fmult
-        transit_h = fr["transit_h"] * tmult
+        # ══ COST MODEL ══
+        # AIR → real market per-ounce pricing (2 service types).
+        # SEA / MULTIMODAL → Freightos live freight + 3-tier insurance/security.
+        billable_oz = (gross_kg * 1000.0) / GRAMS_PER_OZ
 
-        # add a transit-hub leg penalty (extra handling + time) if used
+        if mode == "air":
+            fr = {"source": "market_oz", "live_range": None, "market_pressure": 1.0,
+                  "transit_h": 9, "per_kg": 0}
+            rate = air_oz_rate(gross_kg, service)          # service passed into build
+            freight_cost = billable_oz * rate * fmult
+            transit_h = fr["transit_h"] * tmult
+
+            if service == "door_to_door":
+                # all-inclusive: freight + inland transport + guard + insurance
+                lm_cost = 0.0
+                lm_km = DEST_POINTS[dest_code]["souk_km"]
+                sec_cost = 0.0
+                cargo_cost = 0.0
+                war_cost = 0.0
+                carrier = "INCLUDED"
+            else:  # door_to_airport → add flat inland secure leg ($95 all-in)
+                lm_cost = INLAND_SECURE_FLAT_USD
+                lm_km = DEST_POINTS[dest_code]["souk_km"]
+                sec_cost = 0.0
+                cargo_cost = 0.0
+                war_cost = 0.0
+                carrier = "FLAT95"
+        else:
+            # ── SEA / MULTIMODAL: live Freightos + 3-tier model ──
+            fr = get_freight(origin_code, gross_kg, mode)
+            freight_cost = fr["freight_usd"] * fmult
+            transit_h = fr["transit_h"] * tmult
+            if carrier_mode == "auto":
+                carrier, lm = _cheapest_carrier(dest_code, value_usd, tier)
+            else:
+                carrier = carrier_mode
+                lm = last_mile_cost(dest_code, carrier, value_usd, tier)
+            lm_cost = lm["cost_usd"]; lm_km = lm["km"]
+            sec_cost = sec["security_usd"]
+            cargo_cost = cargo_ins
+            war_cost = ins_war["war_usd"]
+
+        # transit-hub surcharge & extra time
         if transit:
-            freight_cost *= 1.18          # re-consolidation surcharge
+            freight_cost *= 1.18
             transit_h += 36 if mode == "sea" else 8
-
         transit_h += wait["wait_h"]
 
-        # inland secure transport — cheapest carrier (or fixed)
-        if carrier_mode == "auto":
-            carrier, lm = _cheapest_carrier(dest_code, value_usd, tier)
-        else:
-            carrier = carrier_mode
-            lm = last_mile_cost(dest_code, carrier, value_usd, tier)
-
         waiting_cost = wait["wait_h"] * 120
-        total = (freight_cost + cust["total_usd"] + sec["security_usd"]
-                 + cargo_ins + ins_war["war_usd"] + lm["cost_usd"] + waiting_cost)
+        total = (freight_cost + cust["total_usd"] + sec_cost
+                 + cargo_cost + war_cost + lm_cost + waiting_cost)
 
         metrics = {
             "shipping_cost": freight_cost,
-            "insurance":     cargo_ins,
+            "insurance":     cargo_cost,
             "customs":       cust["total_usd"],
-            "security":      sec["security_usd"],
+            "security":      sec_cost,
             "transit_time":  transit_h,
-            "war_risk":      ins_war["war_usd"],
+            "war_risk":      war_cost,
             "weather_risk":  wx_max * 5000,
             "geopolitical":  geo_max * 5000,
-            "last_mile":     lm["cost_usd"],
+            "last_mile":     lm_cost,
         }
 
         # route label
@@ -162,19 +192,21 @@ def analyze(
             "origin_code": origin_code, "origin": o,
             "dest_code": dest_code, "port": dest, "dest_type": dest["type"],
             "mode": mode, "transit": transit, "hub_txt": hub_txt,
+            "service": service,
             "feasible": True, "tier": tier, "weather": wx, "geo": geo,
-            "weight": w, "carrier": carrier, "last_mile_km": lm["km"],
+            "weight": w, "carrier": carrier, "last_mile_km": lm_km,
             "freight_source": fr.get("source", "mock"),
             "freight_range": fr.get("live_range"),
-            "market_pressure": fr["market_pressure"],
+            "market_pressure": fr.get("market_pressure", 1.0),
+            "billable_oz": round(billable_oz, 1),
             "metrics": metrics,
             "hazards": hazards,
             "geo_risk": round(geo_max, 2),
             "wx_risk": round(wx_max, 2),
             "cost": {
                 "freight": round(freight_cost, 2), "customs": round(cust["total_usd"], 2),
-                "security": round(sec["security_usd"], 2), "cargo_ins": round(cargo_ins, 2),
-                "war_ins": round(ins_war["war_usd"], 2), "last_mile": round(lm["cost_usd"], 2),
+                "security": round(sec_cost, 2), "cargo_ins": round(cargo_cost, 2),
+                "war_ins": round(war_cost, 2), "last_mile": round(lm_cost, 2),
                 "waiting": round(waiting_cost, 2), "total": round(total, 2),
                 "per_kg": round(freight_cost / gross_kg, 2),
             },
@@ -183,7 +215,8 @@ def analyze(
 
     # ── DIRECT routes ──
     for dc in air_points:
-        options.append(build("air", dc))
+        options.append(build("air", dc, service="door_to_door"))
+        options.append(build("air", dc, service="door_to_airport"))
     for dc in sea_points:
         options.append(build("sea", dc))
         options.append(build("multimodal", dc))
@@ -193,7 +226,8 @@ def analyze(
         if hub == origin_code:
             continue
         for dc in air_points:
-            options.append(build("air", dc, transit=hub))
+            options.append(build("air", dc, transit=hub, service="door_to_door"))
+            options.append(build("air", dc, transit=hub, service="door_to_airport"))
     for hub in TRANSIT_SEA:
         if hub == origin_code:
             continue
