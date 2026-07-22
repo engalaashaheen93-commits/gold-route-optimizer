@@ -7,7 +7,8 @@ from datetime import date, timedelta
 import plotly.graph_objects as go
 
 from config import (ORIGINS, DEST_POINTS, METALS, WEIGHT_UNITS, APP_MODE,
-                    DEFAULT_LANG, TOPSIS_WEIGHTS, SECURE_CARRIERS, t, name_of)
+                    DEFAULT_LANG, TOPSIS_WEIGHTS, SECURE_CARRIERS,
+                    shipment_value, t, name_of)
 DUBAI_PORTS = DEST_POINTS
 from analyzer import analyze, compute_weight
 from providers import get_metal_price
@@ -182,8 +183,14 @@ with r1c3:
     unit_key = st.selectbox(t("weight_unit", LANG), list(WEIGHT_UNITS.keys()),
                             format_func=lambda k: name_of(WEIGHT_UNITS[k], LANG))
 w = compute_weight(qty, unit_key)
-st.caption(f"{t('gross_weight',LANG)}: {w['gross_kg']:.3f} kg · "
-           f"{t('pure_weight',LANG)}: {w['pure_kg']:.3f} kg")
+st.markdown(
+    f"<div style='background:#241812;border-{'right' if RTL else 'left'}:4px solid #8B6F3A;"
+    f"border-radius:8px;padding:10px 14px;margin:6px 0;color:#F0E6D2;font-size:13px;'>"
+    f"⚖️ {t('net_weight',LANG)}: <b>{w['net_kg']:.3f} kg</b> · "
+    f"{t('packaging',LANG)}: <b>+{w['packaging_kg']:.3f} kg</b> → "
+    f"{t('gross_weight',LANG)}: <b style='color:#E8C874;'>{w['gross_kg']:.3f} kg</b>"
+    f"<div style='color:#9A8A78;font-size:11px;margin-top:4px;'>{t('weight_note',LANG)}</div>"
+    f"</div>", unsafe_allow_html=True)
 
 # ── Row 2: Origin · Departure · Arrival ──
 r2c1, r2c2, r2c3 = st.columns(3)
@@ -216,11 +223,31 @@ with r3c3:
     st.markdown("<div style='height:28px;'></div>", unsafe_allow_html=True)
     st.caption(f"🛡️ {t('carrier_help', LANG)}")
 
-# ── Row 4 (centered): Shipment value ──
-_, vc, _ = st.columns([1, 2, 1])
-with vc:
-    value_usd = st.number_input(t("value", LANG), min_value=1000, value=4800000,
-                                step=10000, format="%d", help=t("value_help", LANG))
+# ── Row 4: Pricing inputs (fix price · premium/discount · extra charges) ──
+st.markdown(f"##### 💵 {t('pricing',LANG)}")
+p1, p2, p3 = st.columns(3)
+with p1:
+    fix_price = st.number_input(t("fix_price", LANG), min_value=0.0, value=4030.0,
+                                step=1.0, format="%.3f", help=t("fix_help", LANG))
+with p2:
+    premium = st.number_input(t("premium", LANG), value=0.0, step=0.5,
+                              format="%.3f", help=t("premium_help", LANG))
+with p3:
+    extra_charges = st.number_input(t("extras", LANG), min_value=0.0, value=0.0,
+                                    step=50.0, format="%.2f", help=t("extras_help", LANG))
+
+# compute shipment value from the trade's own pricing formula
+val = shipment_value(qty, unit_key, fix_price, premium, extra_charges)
+value_usd = val["total_value"]
+
+st.markdown(
+    f"<div style='background:#241812;border-{'right' if RTL else 'left'}:4px solid #C9A24B;"
+    f"border-radius:8px;padding:10px 14px;margin:6px 0;color:#F0E6D2;font-size:13px;'>"
+    f"📊 {val['ounces']:,.3f} {t('oz_unit',LANG)} × ${val['unit_price']:,.3f} "
+    f"= <b style='color:#E8C874;'>${val['metal_value']:,.2f}</b>"
+    + (f" + ${val['extra_charges']:,.2f} {t('extras',LANG)}" if val['extra_charges'] else "")
+    + f" → <b style='color:#4ADE80;'>${val['total_value']:,.2f}</b></div>",
+    unsafe_allow_html=True)
 
 # ── Row 5 (centered): Insurance · Escort toggles ──
 _, tc1, tc2, _ = st.columns([1, 1, 1, 1])
