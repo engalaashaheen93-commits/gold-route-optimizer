@@ -450,12 +450,14 @@ def render_results(ranked):
     _render_breakdown(best)
 
     # ---- comparison chart ----
-    st.markdown(f"### 📊 {t('comparison',LANG)}")
-    _render_comparison(feasible[:6])
+    st.markdown(f"### 📊 {t('chart_tradeoff',LANG)}")
+    _render_cost_time(feasible)
 
-    # ---- radar ----
-    st.markdown(f"### 🎯 {t('radar',LANG)}")
-    _render_radar(feasible[:4])
+    st.markdown(f"### 📉 {t('chart_topn',LANG)}")
+    _render_topN(feasible)
+
+    st.markdown(f"### 🎯 {t('chart_score',LANG)}")
+    _render_score_stack(feasible)
 
     # ---- export ----
     st.markdown("---")
@@ -522,46 +524,89 @@ def _render_breakdown(r):
     </table>""", unsafe_allow_html=True)
 
 
-def _render_comparison(feasible):
-    names = [f"{name_of(r['origin'],LANG)}·{t(MODE_LABEL[r['mode']],LANG)}" for r in feasible]
-    totals = [r["cost"]["total"] for r in feasible]
-    colors = ["#C9A24B" if r["rank"] == 1 else "#8B6F3A" for r in feasible]
-    fig = go.Figure(go.Bar(x=names, y=totals, marker_color=colors,
-                           text=[f"${v:,.0f}" for v in totals], textposition="outside"))
-    fig.update_layout(height=320, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-                      font_color="#F0E6D2", margin=dict(t=20, b=40, l=40, r=20),
-                      yaxis=dict(gridcolor="#3D2419"))
-    st.plotly_chart(fig, use_container_width=True)
+def _route_label(r):
+    """Short, unique label: mode + service + hub + arrival."""
+    mode = t(MODE_LABEL[r["mode"]], LANG)
+    hub = r.get("hub_txt", "").replace(" via ", "")
+    svc = ""
+    if r.get("service") == "door_to_door":
+        svc = " D2D"
+    elif r.get("service") == "door_to_airport":
+        svc = " D2A"
+    port = name_of(r["port"], LANG)
+    return f"#{r['rank']} {mode}{svc} → {port}" + (f" ({hub})" if hub else "")
 
 
-def _render_radar(feasible):
-    cats_keys = ["total", "transit", "war_risk_ins", "weather", "hz_geo"]
-    cats = [t(k, LANG) for k in cats_keys]
+def _render_cost_time(feasible):
+    """Scatter: cost vs time. Shows the trade-off and where the winner sits."""
     fig = go.Figure()
-    palette = ["#C9A24B", "#8B2635", "#E8C874", "#A84860"]
-    fills = ["rgba(201,162,75,0.20)", "rgba(139,38,53,0.20)",
-             "rgba(232,200,116,0.16)", "rgba(168,72,96,0.18)"]
-    # scale each axis by the worst value across the shown routes
-    mx = {k: max(rr["metrics"][k] for rr in feasible[:4]) or 1
-          for k in ("total_cost", "transit_time", "war_risk", "weather_risk", "geopolitical")}
-    for i, r in enumerate(feasible[:4]):
-        m = r["metrics"]
-        norm = [
-            1 - min(m["total_cost"] / mx["total_cost"], 1),
-            1 - min(m["transit_time"] / mx["transit_time"], 1),
-            1 - min(m["war_risk"] / mx["war_risk"], 1),
-            1 - min(m["weather_risk"] / mx["weather_risk"], 1),
-            1 - min(m["geopolitical"] / mx["geopolitical"], 1),
-        ]
-        fig.add_trace(go.Scatterpolar(
-            r=norm + [norm[0]], theta=cats + [cats[0]], fill="toself",
-            name=f"{name_of(r['origin'],LANG)}·{t(MODE_LABEL[r['mode']],LANG)}",
-            line_color=palette[i % 4], fillcolor=fills[i % 4]))
-    fig.update_layout(height=380, paper_bgcolor="rgba(0,0,0,0)",
-                      font_color="#F0E6D2", margin=dict(t=30, b=30),
-                      polar=dict(bgcolor="rgba(26,37,53,0.5)",
-                                 radialaxis=dict(visible=True, range=[0, 1], gridcolor="#3D2419")))
+    for r in feasible:
+        is_best = r["rank"] == 1
+        fig.add_trace(go.Scatter(
+            x=[r["transit_h"]], y=[r["cost"]["total"]], mode="markers",
+            marker=dict(size=18 if is_best else 10,
+                        color="#C9A24B" if is_best else "#8B2635",
+                        line=dict(width=2 if is_best else 0, color="#E8C874"),
+                        symbol="star" if is_best else "circle"),
+            name=_route_label(r), showlegend=False,
+            hovertemplate=(f"<b>{_route_label(r)}</b><br>"
+                           f"{t('total',LANG)}: ${r['cost']['total']:,.0f}<br>"
+                           f"{t('transit',LANG)}: {r['transit_h']:.0f}h<extra></extra>")))
+    fig.update_layout(
+        height=380, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(13,10,8,0.35)",
+        font_color="#F0E6D2", margin=dict(t=30, b=50, l=60, r=20),
+        xaxis=dict(title=t("transit", LANG) + " (h)", gridcolor="#3D2419", zeroline=False),
+        yaxis=dict(title=t("total", LANG) + " (USD)", gridcolor="#3D2419", zeroline=False))
     st.plotly_chart(fig, use_container_width=True)
+    st.caption(t("chart_hint_scatter", LANG))
+
+
+def _render_topN(feasible, n=8):
+    """Horizontal bar of total cost for the top N — labels stay readable."""
+    top = feasible[:n][::-1]          # reverse so #1 sits on top
+    labels = [_route_label(r) for r in top]
+    totals = [r["cost"]["total"] for r in top]
+    colors = ["#C9A24B" if r["rank"] == 1 else "#8B6F3A" for r in top]
+    fig = go.Figure(go.Bar(
+        x=totals, y=labels, orientation="h", marker_color=colors,
+        text=[f"${v:,.0f}" for v in totals], textposition="auto",
+        hovertemplate="%{y}<br>$%{x:,.0f}<extra></extra>"))
+    fig.update_layout(
+        height=max(300, 42 * len(top)), paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(13,10,8,0.35)", font_color="#F0E6D2",
+        margin=dict(t=20, b=40, l=10, r=20),
+        xaxis=dict(title=t("total", LANG) + " (USD)", gridcolor="#3D2419"),
+        yaxis=dict(automargin=True))
+    st.plotly_chart(fig, use_container_width=True)
+
+
+def _render_score_stack(feasible, n=8):
+    """Stacked bar: how each criterion contributed to the final score."""
+    top = feasible[:n][::-1]
+    labels = [_route_label(r) for r in top]
+    crit_order = ["total_cost", "transit_time", "geopolitical", "weather_risk", "war_risk"]
+    crit_name = {"total_cost": t("total", LANG), "transit_time": t("transit", LANG),
+                 "geopolitical": t("hz_geo", LANG), "weather_risk": t("weather", LANG),
+                 "war_risk": t("war_risk_ins", LANG)}
+    palette = {"total_cost": "#C9A24B", "transit_time": "#E8C874",
+               "geopolitical": "#8B2635", "weather_risk": "#A84860", "war_risk": "#8B6F3A"}
+    fig = go.Figure()
+    for c in crit_order:
+        vals = [r.get("criteria_detail", {}).get(c, {}).get("weighted", 0) for r in top]
+        fig.add_trace(go.Bar(
+            x=vals, y=labels, orientation="h", name=crit_name[c],
+            marker_color=palette[c],
+            hovertemplate="%{y}<br>" + crit_name[c] + ": %{x:.3f}<extra></extra>"))
+    fig.update_layout(
+        barmode="stack", height=max(300, 42 * len(top)),
+        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(13,10,8,0.35)",
+        font_color="#F0E6D2", margin=dict(t=20, b=40, l=10, r=20),
+        xaxis=dict(title=t("topsis_score", LANG), gridcolor="#3D2419"),
+        yaxis=dict(automargin=True),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0,
+                    bgcolor="rgba(0,0,0,0)"))
+    st.plotly_chart(fig, use_container_width=True)
+    st.caption(t("chart_hint_stack", LANG))
 
 
 # ══════════════════════════════════════════════════════════════════
