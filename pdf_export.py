@@ -146,24 +146,33 @@ def generate_pdf(ranked: list, meta: dict) -> bytes:
     # all options table
     pdf.set_font("Helvetica", "B", 12)
     pdf.cell(0, 8, "All Route Options (ranked)", ln=True)
-    pdf.set_font("Helvetica", "B", 9)
+    pdf.set_font("Helvetica", "B", 8)
     pdf.set_fill_color(26, 37, 53)
     pdf.set_text_color(255, 255, 255)
-    pdf.cell(12, 7, "Rank", border=1, fill=True, align="C")
-    pdf.cell(50, 7, "Route", border=1, fill=True)
-    pdf.cell(30, 7, "Mode", border=1, fill=True)
-    pdf.cell(35, 7, "Total USD", border=1, fill=True, align="R")
-    pdf.cell(25, 7, "Transit h", border=1, fill=True, align="R")
+    pdf.cell(10, 7, "#", border=1, fill=True, align="C")
+    pdf.cell(30, 7, "Arrival", border=1, fill=True)
+    pdf.cell(28, 7, "Via hub", border=1, fill=True)
+    pdf.cell(20, 7, "Mode", border=1, fill=True)
+    pdf.cell(30, 7, "Service", border=1, fill=True)
+    pdf.cell(28, 7, "Total USD", border=1, fill=True, align="R")
+    pdf.cell(20, 7, "Hours", border=1, fill=True, align="R")
     pdf.cell(0, 7, "Score", border=1, fill=True, align="R", ln=True)
 
     pdf.set_text_color(30, 30, 30)
-    pdf.set_font("Helvetica", "", 9)
+    pdf.set_font("Helvetica", "", 8)
+    SVC = {"door_to_door": "Door-to-Door", "door_to_airport": "Door-to-Airport"}
     for r in feasible:
-        pdf.cell(12, 6, str(r["rank"]), border=1, align="C")
-        pdf.cell(50, 6, f"{meta.get('origin')}->{meta.get('port')[:12]}", border=1)
-        pdf.cell(30, 6, r["mode"].title(), border=1)
-        pdf.cell(35, 6, f"${r['cost']['total']:,.0f}", border=1, align="R")
-        pdf.cell(25, 6, f"{r['transit_h']:.0f}", border=1, align="R")
+        # each row shows ITS OWN arrival point, hub and service type
+        arrival = r.get("port", {}).get("en", "-")
+        hub = r.get("hub_txt", "").replace(" via ", "") or "Direct"
+        svc = SVC.get(r.get("service"), "-")
+        pdf.cell(10, 6, str(r["rank"]), border=1, align="C")
+        pdf.cell(30, 6, arrival[:17], border=1)
+        pdf.cell(28, 6, hub[:15], border=1)
+        pdf.cell(20, 6, r["mode"].title()[:10], border=1)
+        pdf.cell(30, 6, svc[:17], border=1)
+        pdf.cell(28, 6, f"${r['cost']['total']:,.0f}", border=1, align="R")
+        pdf.cell(20, 6, f"{r['transit_h']:.0f}", border=1, align="R")
         pdf.cell(0, 6, f"{r['cc_score']:.3f}", border=1, align="R", ln=True)
 
     pdf.ln(6)
@@ -188,7 +197,8 @@ def generate_pdf(ranked: list, meta: dict) -> bytes:
         why = "; ".join(reason) if reason else "lower overall score"
         pdf.set_font("Helvetica", "B", 9)
         pdf.multi_cell(0, 5,
-            f"#{r['rank']} {r['mode'].title()} to {r['port']['en']}: "
+            f"#{r['rank']} {r['mode'].title()}{r.get('hub_txt','')} to {r['port']['en']}"
+            f" [{SVC.get(r.get('service'),'-')}]: "
             f"${r['cost']['total']:,.0f}, {r['transit_h']:.0f}h", border=0)
         pdf.set_font("Helvetica", "I", 9)
         pdf.set_text_color(110, 110, 110)
