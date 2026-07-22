@@ -65,14 +65,14 @@ GEO_RISK = {
     # transit hubs
     "PUS": 0.18, "CMB": 0.30, "PKG": 0.15, "ICN": 0.25, "NRT": 0.15,
     # UAE arrival points (Strait of Hormuz proximity)
-    "JEA": 0.28, "RAS": 0.28, "HAM": 0.28, "DXB": 0.25, "SHJ": 0.25, "AUH": 0.22,
+    "JEA": 0.28, "HAM": 0.28, "DXB": 0.25, "SHJ": 0.25, "AUH": 0.22,
 }
 
 # cities to check live weather for each routing node
 NODE_CITY = {
     "PVG": "Shanghai", "HKG": "Hong Kong", "SIN": "Singapore", "IST": "Istanbul",
     "PUS": "Busan", "CMB": "Colombo", "PKG": "Kuala Lumpur", "ICN": "Seoul", "NRT": "Tokyo",
-    "JEA": "Dubai", "RAS": "Dubai", "HAM": "Dubai", "DXB": "Dubai", "SHJ": "Dubai", "AUH": "Dubai",
+    "JEA": "Dubai", "HAM": "Dubai", "DXB": "Dubai", "SHJ": "Dubai", "AUH": "Dubai",
 }
 
 # ══════════════════════════════════════════════════════════════════
@@ -83,8 +83,6 @@ DEST_POINTS = {
     # ── Sea ports ──
     "JEA": {"en": "Jebel Ali Port",  "ar": "ميناء جبل علي", "type": "sea",
             "souk_km": 45, "flag": "🚢"},
-    "RAS": {"en": "Port Rashid",     "ar": "ميناء راشد",    "type": "sea",
-            "souk_km": 12, "flag": "🚢"},
     "HAM": {"en": "Hamriyah Port",   "ar": "ميناء الحمرية", "type": "sea",
             "souk_km": 28, "flag": "🚢"},
     # ── Airports ──
@@ -204,6 +202,34 @@ WEIGHT_UNITS = {
 # TRANSPORT MODES — app compares ALL by default
 # ══════════════════════════════════════════════════════════════════
 MODES = ["air", "sea", "multimodal"]
+
+# ══════════════════════════════════════════════════════════════════
+# MARKET AIR-FREIGHT PRICING (per troy ounce) — real industry rates.
+# Two service types:
+#   door_to_door    = all-inclusive (freight + inland transport + guard + insurance)
+#   door_to_airport = to the airport only; inland guard/insurance added separately
+# Rate decreases as quantity grows (a single truck carries the gold regardless).
+# ══════════════════════════════════════════════════════════════════
+GRAMS_PER_OZ = 31.1035
+
+AIR_OZ_PRICING = [
+    # (max_gross_kg, door_to_door $/oz, door_to_airport $/oz)
+    (50.0,  2.00, 1.50),
+    (75.0,  1.50, 1.00),
+    (9e9,   1.20, 0.80),   # above 75 kg
+]
+
+# Door-to-Airport adds a flat inland secure leg (transport + guard + insurance)
+# to reach the Gold Souk. Flat because one armoured truck covers the load.
+INLAND_SECURE_FLAT_USD = 95.0
+
+
+def air_oz_rate(gross_kg: float, service: str) -> float:
+    """Return $/oz for the given weight tier and service type."""
+    for max_kg, dtd, dta in AIR_OZ_PRICING:
+        if gross_kg <= max_kg:
+            return dtd if service == "door_to_door" else dta
+    return AIR_OZ_PRICING[-1][1 if service == "door_to_door" else 2]
 
 # ══════════════════════════════════════════════════════════════════
 # TOPSIS weights
@@ -335,6 +361,10 @@ T = {
     "via_hub":         {"en": "via",                            "ar": "عبر"},
     "direct":          {"en": "Direct",                         "ar": "مباشر"},
     "routes_compared": {"en": "routes compared",                "ar": "مسار تمت مقارنته"},
+    "svc_d2d":         {"en": "Door-to-Door",                   "ar": "من الباب للباب"},
+    "svc_d2a":         {"en": "Door-to-Airport",                "ar": "من الباب للمطار"},
+    "svc_included":    {"en": "all-inclusive",                  "ar": "شامل كل شي"},
+    "svc_flat":        {"en": "+ inland secure leg",            "ar": "+ نقل داخلي آمن"},
 
     # verdict banner
     "verdict_title":   {"en": "Best Route Found",               "ar": "أفضل مسار"},
