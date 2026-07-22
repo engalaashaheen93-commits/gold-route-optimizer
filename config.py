@@ -241,8 +241,35 @@ OZ_PER_KG = {
 
 # Packaging overhead: cartons, tape, plastic bags, sealing materials.
 # Carriers bill the FULL gross weight (packaging is charged as if it were gold).
-# Field figure: a 50 kg shipment gains ~300 g to 1.5 kg → ~0.6%–3%; using ~2%.
-PACKAGING_FACTOR = 1.02      # +2% over net metal weight
+# Field figures for a 50 kg shipment:
+#   light   : security bags/envelopes + tape + dividers → 200–800 g  (~1%)
+#   standard: strong outer cartons + extra protection   → 300 g–1.5 kg (~1.8%)
+#   heavy   : wooden crate / special security packing   → 2–3 kg     (~5%)
+PACKAGING_OPTIONS = {
+    "light": {
+        "en": "Security bags + tape + dividers",
+        "ar": "أكياس أمان + لاصق + فواصل داخلية",
+        "factor": 1.010,     # ~1%
+        "note_en": "≈ 200–800 g on a 50 kg shipment",
+        "note_ar": "≈ 200–800 غ على شحنة 50 كغ",
+    },
+    "standard": {
+        "en": "Strong outer cartons + extra protection",
+        "ar": "كراتين خارجية قوية + حماية إضافية",
+        "factor": 1.018,     # ~1.8%
+        "note_en": "≈ 300 g – 1.5 kg on a 50 kg shipment",
+        "note_ar": "≈ 300 غ – 1.5 كغ على شحنة 50 كغ",
+    },
+    "heavy": {
+        "en": "Wooden crate / special security packing",
+        "ar": "صندوق خشبي / تغليف أمني خاص",
+        "factor": 1.050,     # ~5%
+        "note_en": "≈ 2–3 kg on a 50 kg shipment",
+        "note_ar": "≈ 2–3 كغ على شحنة 50 كغ",
+    },
+}
+DEFAULT_PACKAGING = "standard"
+PACKAGING_FACTOR = PACKAGING_OPTIONS[DEFAULT_PACKAGING]["factor"]
 
 AIR_OZ_PRICING = [
     # (max_gross_kg, door_to_door $/oz, door_to_airport $/oz)
@@ -368,8 +395,8 @@ T = {
     "value":           {"en": "Shipment Value (USD)",            "ar": "قيمة الشحنة (دولار)"},
     "value_help":      {"en": "Enter the insured value of the shipment",
                         "ar": "أدخل القيمة المؤمّنة للشحنة"},
-    "depart_date":     {"en": "Requested Departure Date",        "ar": "تاريخ الانطلاق المطلوب"},
-    "arrive_date":     {"en": "Required Arrival Date",           "ar": "تاريخ الاستلام المطلوب"},
+    "depart_date":     {"en": "Departure Date",                  "ar": "تاريخ الانطلاق"},
+    "arrive_date":     {"en": "Arrival Date",                    "ar": "تاريخ الاستلام"},
     "urgency":         {"en": "Urgency Level",                   "ar": "مستوى الاستعجال"},
     "escort":          {"en": "Armed Escort",                    "ar": "حراسة مسلحة"},
     "full_insurance":  {"en": "Full Insurance Coverage",         "ar": "تغطية تأمينية كاملة"},
@@ -441,25 +468,25 @@ T = {
     "gross_weight":    {"en": "Billable weight",                "ar": "الوزن المحتسب"},
     "net_weight":      {"en": "Net metal",                      "ar": "المعدن الصافي"},
     "packaging":       {"en": "Packaging",                      "ar": "التغليف"},
+    "packaging_type":  {"en": "Packaging Type",                 "ar": "نوع التغليف"},
+    "packaging_help":  {"en": "Packaging weight is billed as if it were metal",
+                        "ar": "وزن التغليف يُحتسب كأنه معدن"},
     "weight_note":     {"en": "Carriers bill the packed weight — cartons, tape and sealing are charged as if they were metal.",
                         "ar": "الناقل يحتسب الوزن بعد التغليف — الكراتين واللاصق ومواد الإغلاق تُحسب كأنها معدن."},
 
     # pricing inputs
     "pricing":         {"en": "Shipment Pricing",               "ar": "تسعير الشحنة"},
-    "fix_price":       {"en": "Fix Price (USD/oz)",             "ar": "سعر التثبيت (دولار/أونصة)"},
-    "fix_help":        {"en": "The locked metal price per troy ounce",
-                        "ar": "سعر المعدن المثبّت لكل أونصة"},
-    "premium":         {"en": "Premium / Discount (USD/oz)",    "ar": "البريميوم / الخصم (دولار/أونصة)"},
-    "premium_help":    {"en": "Added to (or subtracted from) the fix price; use a negative number for a discount",
-                        "ar": "يُضاف إلى سعر التثبيت أو يُطرح منه؛ استخدم رقماً سالباً للخصم"},
-    "extras":          {"en": "Extra Charges (USD)",            "ar": "رسوم إضافية (دولار)"},
-    "extras_help":     {"en": "Any additional charges on the shipment",
-                        "ar": "أي رسوم إضافية على الشحنة"},
+    "fix_price":       {"en": "Fix Price",                    "ar": "سعر التثبيت"},
+    "fix_help":        {"en": "Fixing price in USD per troy ounce", "ar": "سعر التثبيت بالدولار لكل أونصة"},
+    "premium":         {"en": "Premium / Discount",           "ar": "البريميوم / الخصم"},
+    "premium_help":    {"en": "USD per ounce added to (or subtracted from) the fix price", "ar": "دولار لكل أونصة يُضاف إلى سعر التثبيت أو يُطرح منه"},
+    "extras":          {"en": "Extra Charges",                "ar": "رسوم إضافية"},
+    "extras_help":     {"en": "One-off charges for the whole shipment (USD)", "ar": "رسوم لمرة واحدة على كامل الشحنة (دولار)"},
     "oz_unit":         {"en": "oz",                             "ar": "أونصة"},
     "pure_weight":     {"en": "Pure content",                   "ar": "المحتوى الصافي"},
 
     # secure carrier
-    "carrier":         {"en": "Secure Inland Carrier",          "ar": "شركة النقل الآمن الداخلي"},
+    "carrier":         {"en": "Secure Carrier",               "ar": "شركة النقل الآمن"},
     "carrier_help":    {"en": "Specialised precious-metals transport & armed escort to the Gold Souk",
                         "ar": "نقل مخصص للمعادن الثمينة مع حراسة مسلحة حتى سوق الذهب"},
     "last_mile_full":  {"en": "Secure Delivery to Gold Souk",   "ar": "التوصيل الآمن لسوق الذهب"},
