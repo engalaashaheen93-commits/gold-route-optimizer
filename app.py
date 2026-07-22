@@ -39,6 +39,39 @@ h1,h2,h3,h4,h5,p,div,span,label {{ color:#F0E6D2; }}
   background:#241812 !important; border:1px solid #3D2419 !important; color:#F0E6D2 !important; }}
 [data-testid="stSidebar"] {{ background:#140F0B; border-{'left' if not RTL else 'right'}:1px solid #3D2419; }}
 
+/* ── dropdown / calendar popovers ──
+   These render in a portal OUTSIDE the themed container, so on mobile they
+   fell back to a white background with gold text (invisible). Force the dark
+   theme on every popover layer. */
+div[data-baseweb="popover"],
+div[data-baseweb="popover"] > div,
+div[data-baseweb="menu"],
+div[data-baseweb="menu"] ul,
+ul[data-baseweb="menu"],
+div[data-baseweb="calendar"],
+div[data-baseweb="datepicker"],
+[data-baseweb="layer"] div[role="listbox"],
+[data-baseweb="layer"] div[role="dialog"] {{
+  background:#241812 !important; color:#F0E6D2 !important;
+  border:1px solid #8B6F3A !important; }}
+
+/* each option row */
+li[role="option"], div[role="option"],
+ul[data-baseweb="menu"] li {{
+  background:#241812 !important; color:#F0E6D2 !important; }}
+
+/* hovered / highlighted / selected option */
+li[role="option"]:hover, div[role="option"]:hover,
+li[role="option"][aria-selected="true"],
+div[role="option"][aria-selected="true"],
+ul[data-baseweb="menu"] li:hover {{
+  background:#8B2635 !important; color:#F0E6D2 !important; }}
+
+/* calendar day cells */
+div[data-baseweb="calendar"] * {{ color:#F0E6D2 !important; }}
+div[data-baseweb="calendar"] [aria-selected="true"] {{
+  background:#C9A24B !important; color:#0D0A08 !important; }}
+
 /* metals ticker */
 @keyframes scroll-{ 'rtl' if RTL else 'ltr' } {{
   0%   {{ transform: translateX({'-100%' if RTL else '0'}); }}
