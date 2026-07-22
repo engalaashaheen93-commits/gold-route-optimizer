@@ -3,6 +3,7 @@ PDF report generator (English) for the ranked route analysis.
 """
 from fpdf import FPDF
 
+
 def generate_pdf(ranked: list, meta: dict) -> bytes:
     feasible = [r for r in ranked if r.get("feasible", True)]
     best = feasible[0]
@@ -145,37 +146,115 @@ def generate_pdf(ranked: list, meta: dict) -> bytes:
     # all options table
     pdf.set_font("Helvetica", "B", 12)
     pdf.cell(0, 8, "All Route Options (ranked)", ln=True)
-    pdf.set_font("Helvetica", "B", 8)
+    pdf.set_font("Helvetica", "B", 7)
     pdf.set_fill_color(26, 37, 53)
     pdf.set_text_color(255, 255, 255)
-    pdf.cell(10, 7, "#", border=1, fill=True, align="C")
-    pdf.cell(30, 7, "Arrival", border=1, fill=True)
-    pdf.cell(28, 7, "Via hub", border=1, fill=True)
-    pdf.cell(20, 7, "Mode", border=1, fill=True)
-    pdf.cell(30, 7, "Service", border=1, fill=True)
-    pdf.cell(28, 7, "Total USD", border=1, fill=True, align="R")
-    pdf.cell(20, 7, "Hours", border=1, fill=True, align="R")
+    pdf.cell(8, 7, "#", border=1, fill=True, align="C")
+    pdf.cell(27, 7, "Arrival", border=1, fill=True)
+    pdf.cell(22, 7, "Via hub", border=1, fill=True)
+    pdf.cell(17, 7, "Mode", border=1, fill=True)
+    pdf.cell(26, 7, "Service", border=1, fill=True)
+    pdf.cell(24, 7, "Total USD", border=1, fill=True, align="R")
+    pdf.cell(14, 7, "Hours", border=1, fill=True, align="R")
+    pdf.cell(17, 7, "War risk", border=1, fill=True, align="C")
+    pdf.cell(20, 7, "Weather", border=1, fill=True, align="C")
     pdf.cell(0, 7, "Score", border=1, fill=True, align="R", ln=True)
 
     pdf.set_text_color(30, 30, 30)
-    pdf.set_font("Helvetica", "", 8)
+    pdf.set_font("Helvetica", "", 7)
     SVC = {"door_to_door": "Door-to-Door", "door_to_airport": "Door-to-Airport"}
     for r in feasible:
-        # each row shows ITS OWN arrival point, hub and service type
         arrival = r.get("port", {}).get("en", "-")
         hub = r.get("hub_txt", "").replace(" via ", "") or "Direct"
         svc = SVC.get(r.get("service"), "-")
-        pdf.cell(10, 6, str(r["rank"]), border=1, align="C")
-        pdf.cell(30, 6, arrival[:17], border=1)
-        pdf.cell(28, 6, hub[:15], border=1)
-        pdf.cell(20, 6, r["mode"].title()[:10], border=1)
-        pdf.cell(30, 6, svc[:17], border=1)
-        pdf.cell(28, 6, f"${r['cost']['total']:,.0f}", border=1, align="R")
-        pdf.cell(20, 6, f"{r['transit_h']:.0f}", border=1, align="R")
+        # risk flags for THIS route
+        hzs = r.get("hazards", [])
+        geo_hz = [h for h in hzs if h["type"] == "geo"]
+        wx_hz = [h for h in hzs if h["type"] == "weather"]
+        war_txt = (f"{geo_hz[0]['level'].upper()}" if geo_hz else "none")
+        wx_txt = (f"{wx_hz[0]['level'].upper()} {wx_hz[0]['where'][:6]}" if wx_hz else "clear")
+        pdf.cell(8, 6, str(r["rank"]), border=1, align="C")
+        pdf.cell(27, 6, arrival[:16], border=1)
+        pdf.cell(22, 6, hub[:12], border=1)
+        pdf.cell(17, 6, r["mode"].title()[:9], border=1)
+        pdf.cell(26, 6, svc[:15], border=1)
+        pdf.cell(24, 6, f"${r['cost']['total']:,.0f}", border=1, align="R")
+        pdf.cell(14, 6, f"{r['transit_h']:.0f}", border=1, align="R")
+        pdf.cell(17, 6, war_txt[:9], border=1, align="C")
+        pdf.cell(20, 6, wx_txt[:12], border=1, align="C")
         pdf.cell(0, 6, f"{r['cc_score']:.3f}", border=1, align="R", ln=True)
 
     pdf.ln(6)
-    # ── Full study: why each alternative was NOT chosen ──
+    # ── How each route earned its score (per-criterion breakdown) ──
+    pdf.add_page()
+    pdf.set_font("Helvetica", "B", 12)
+    pdf.set_text_color(139, 38, 53)
+    pdf.cell(0, 8, "How Each Route Earned Its Score", ln=True)
+    pdf.set_text_color(30, 30, 30)
+    pdf.set_font("Helvetica", "", 8)
+    pdf.set_x(pdf.l_margin)
+    pdf.multi_cell(0, 5,
+        "Each criterion is scored 0 to 1 (1 = best value observed among all routes, "
+        "0 = worst), then multiplied by its weight. The weighted values are summed, and "
+        "TOPSIS converts the result into the final closeness score used for ranking.")
+    pdf.ln(2)
+
+    CRIT_LABEL = {
+        "total_cost": "Total cost", "transit_time": "Transit time",
+        "war_risk": "War risk", "geopolitical": "Geopolitical", "weather_risk": "Weather",
+    }
+    for r in feasible[:12]:      # top 12 keeps the report readable
+        det = r.get("criteria_detail", {})
+        if not det:
+            continue
+        pdf.set_x(pdf.l_margin)
+        pdf.set_font("Helvetica", "B", 9)
+        pdf.set_fill_color(245, 238, 226)
+        hub = r.get("hub_txt", "").replace(" via ", "via ") or "Direct"
+        pdf.multi_cell(0, 6,
+            f"#{r['rank']}  {r['mode'].title()} {hub} -> {r['port']['en']} "
+            f"[{SVC.get(r.get('service'),'-')}]  |  ${r['cost']['total']:,.0f}  |  "
+            f"{r['transit_h']:.0f}h  |  final score {r['cc_score']:.3f}",
+            border=0, fill=True)
+        # header row
+        pdf.set_x(pdf.l_margin)
+        pdf.set_font("Helvetica", "B", 7)
+        pdf.cell(38, 5, "Criterion", border=1)
+        pdf.cell(30, 5, "Raw value", border=1, align="R")
+        pdf.cell(22, 5, "Score", border=1, align="C")
+        pdf.cell(20, 5, "Weight", border=1, align="C")
+        pdf.cell(0, 5, "Weighted", border=1, align="R", ln=True)
+        pdf.set_font("Helvetica", "", 7)
+        for cname, d in det.items():
+            raw = d["raw"]
+            raw_txt = (f"${raw:,.0f}" if cname in ("total_cost", "war_risk")
+                       else (f"{raw:,.0f} h" if cname == "transit_time" else f"{raw:,.0f}"))
+            pdf.set_x(pdf.l_margin)
+            pdf.cell(38, 5, CRIT_LABEL.get(cname, cname), border=1)
+            pdf.cell(30, 5, raw_txt, border=1, align="R")
+            pdf.cell(22, 5, f"{d['score']:.3f}", border=1, align="C")
+            pdf.cell(20, 5, f"{int(d['weight']*100)}%", border=1, align="C")
+            pdf.cell(0, 5, f"{d['weighted']:.4f}", border=1, align="R", ln=True)
+        pdf.set_x(pdf.l_margin)
+        pdf.set_font("Helvetica", "B", 7)
+        pdf.cell(110, 5, "Weighted sum", border=1)
+        pdf.cell(0, 5, f"{r.get('weighted_sum',0):.4f}", border=1, align="R", ln=True)
+        # route-specific hazards
+        hzs = r.get("hazards", [])
+        pdf.set_x(pdf.l_margin)
+        pdf.set_font("Helvetica", "I", 7)
+        pdf.set_text_color(110, 110, 110)
+        if hzs:
+            txt = "; ".join(
+                f"{'Weather' if h['type']=='weather' else 'Geopolitical'} "
+                f"({h['level']}) at {h['where']}" for h in hzs)
+            pdf.multi_cell(0, 5, f"Risk flags: {txt}")
+        else:
+            pdf.multi_cell(0, 5, "Risk flags: none on this route.")
+        pdf.set_text_color(30, 30, 30)
+        pdf.ln(2)
+
+    pdf.ln(2)
     pdf.set_font("Helvetica", "B", 12)
     pdf.set_text_color(139, 38, 53)
     pdf.cell(0, 8, "Alternatives Analysed (not selected)", ln=True)
