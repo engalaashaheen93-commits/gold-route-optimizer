@@ -363,17 +363,21 @@ def shipment_value(qty: float, unit_key: str, fix_price_oz: float,
 
 # ══════════════════════════════════════════════════════════════════
 # TOPSIS weights
+#
+# IMPORTANT: cost is evaluated as ONE criterion (total landed cost), not as
+# separate freight/insurance/security lines. Reason: the air "door-to-door"
+# rate already bundles inland transport, guarding and cargo insurance into
+# the freight figure, while sea prices them separately. Splitting cost into
+# line items therefore penalised the bundled option for having a "high
+# freight" number even when its TOTAL was far cheaper. Comparing totals keeps
+# every pricing structure on equal footing.
 # ══════════════════════════════════════════════════════════════════
 TOPSIS_WEIGHTS = {
-    "shipping_cost":  0.24,
-    "insurance":      0.14,
-    "customs":        0.10,
-    "security":       0.14,
-    "transit_time":   0.20,
-    "war_risk":       0.05,
-    "weather_risk":   0.04,
-    "geopolitical":   0.05,
-    "last_mile":      0.04,
+    "total_cost":     0.46,   # full landed cost, door to Gold Souk
+    "transit_time":   0.30,   # total elapsed hours
+    "war_risk":       0.06,
+    "geopolitical":   0.09,
+    "weather_risk":   0.09,
 }
 
 # ══════════════════════════════════════════════════════════════════
