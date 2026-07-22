@@ -199,11 +199,52 @@ def generate_pdf(ranked: list, meta: dict) -> bytes:
         "TOPSIS converts the result into the final closeness score used for ranking.")
     pdf.ln(2)
 
+    # ── compact overview: every route's weighted contributions on one line ──
+    pdf.set_font("Helvetica", "B", 8)
+    pdf.set_fill_color(26, 37, 53)
+    pdf.set_text_color(255, 255, 255)
+    pdf.set_x(pdf.l_margin)
+    pdf.cell(9, 6, "#", border=1, fill=True, align="C")
+    pdf.cell(52, 6, "Route", border=1, fill=True)
+    pdf.cell(21, 6, "Cost 46%", border=1, fill=True, align="C")
+    pdf.cell(21, 6, "Time 30%", border=1, fill=True, align="C")
+    pdf.cell(18, 6, "Geo 9%", border=1, fill=True, align="C")
+    pdf.cell(19, 6, "Wx 9%", border=1, fill=True, align="C")
+    pdf.cell(18, 6, "War 6%", border=1, fill=True, align="C")
+    pdf.cell(0, 6, "Score", border=1, fill=True, align="R", ln=True)
+    pdf.set_text_color(30, 30, 30)
+    pdf.set_font("Helvetica", "", 7)
+    for r in feasible:
+        d = r.get("criteria_detail", {})
+        if not d:
+            continue
+        hub = r.get("hub_txt", "").replace(" via ", "via ") or "Direct"
+        svc = "D2D" if r.get("service") == "door_to_door" else (
+              "D2A" if r.get("service") == "door_to_airport" else "-")
+        label = f"{r['mode'].title()} {svc} {r['port']['en']} ({hub})"
+        pdf.set_x(pdf.l_margin)
+        pdf.cell(9, 5, str(r["rank"]), border=1, align="C")
+        pdf.cell(52, 5, label[:34], border=1)
+        pdf.cell(21, 5, f"{d['total_cost']['weighted']:.3f}", border=1, align="C")
+        pdf.cell(21, 5, f"{d['transit_time']['weighted']:.3f}", border=1, align="C")
+        pdf.cell(18, 5, f"{d['geopolitical']['weighted']:.3f}", border=1, align="C")
+        pdf.cell(19, 5, f"{d['weather_risk']['weighted']:.3f}", border=1, align="C")
+        pdf.cell(18, 5, f"{d['war_risk']['weighted']:.3f}", border=1, align="C")
+        pdf.cell(0, 5, f"{r['cc_score']:.3f}", border=1, align="R", ln=True)
+
+    pdf.ln(4)
+    pdf.set_font("Helvetica", "B", 10)
+    pdf.set_text_color(139, 38, 53)
+    pdf.set_x(pdf.l_margin)
+    pdf.cell(0, 7, "Detailed scoring per route", ln=True)
+    pdf.set_text_color(30, 30, 30)
+    pdf.ln(1)
+
     CRIT_LABEL = {
         "total_cost": "Total cost", "transit_time": "Transit time",
         "war_risk": "War risk", "geopolitical": "Geopolitical", "weather_risk": "Weather",
     }
-    for r in feasible[:12]:      # top 12 keeps the report readable
+    for r in feasible:      # every route gets its own scoring table
         det = r.get("criteria_detail", {})
         if not det:
             continue
@@ -253,37 +294,6 @@ def generate_pdf(ranked: list, meta: dict) -> bytes:
             pdf.multi_cell(0, 5, "Risk flags: none on this route.")
         pdf.set_text_color(30, 30, 30)
         pdf.ln(2)
-
-    pdf.ln(2)
-    pdf.set_font("Helvetica", "B", 12)
-    pdf.set_text_color(139, 38, 53)
-    pdf.cell(0, 8, "Alternatives Analysed (not selected)", ln=True)
-    pdf.set_text_color(30, 30, 30)
-    pdf.set_font("Helvetica", "", 9)
-    alts = [r for r in feasible if r["rank"] != 1]
-    for r in alts:
-        pdf.set_x(pdf.l_margin)
-        diff = r["cost"]["total"] - best["cost"]["total"]
-        slower = r["transit_h"] - best["transit_h"]
-        reason = []
-        if diff > 0:
-            reason.append(f"${diff:,.0f} more expensive")
-        if slower > 0:
-            reason.append(f"{slower:.0f}h slower")
-        if r["cc_score"] < best["cc_score"]:
-            reason.append(f"lower score ({r['cc_score']:.3f} vs {best['cc_score']:.3f})")
-        why = "; ".join(reason) if reason else "lower overall score"
-        pdf.set_font("Helvetica", "B", 9)
-        pdf.multi_cell(0, 5,
-            f"#{r['rank']} {r['mode'].title()}{r.get('hub_txt','')} to {r['port']['en']}"
-            f" [{SVC.get(r.get('service'),'-')}]: "
-            f"${r['cost']['total']:,.0f}, {r['transit_h']:.0f}h", border=0)
-        pdf.set_font("Helvetica", "I", 9)
-        pdf.set_text_color(110, 110, 110)
-        pdf.set_x(pdf.l_margin)
-        pdf.multi_cell(0, 5, f"Not chosen: {why}.", border=0)
-        pdf.set_text_color(30, 30, 30)
-        pdf.ln(1)
 
     pdf.ln(4)
     # highlighted precious-metals cost-structure note
