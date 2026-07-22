@@ -23,11 +23,21 @@ from topsis import run_topsis, confidence_score
 
 
 def compute_weight(qty: float, unit_key: str) -> dict:
+    """
+    Net metal weight, plus the packed (billable) weight.
+    Carriers charge on the packed gross weight — cartons, tape, bags and
+    sealing all get billed as if they were gold.
+    """
+    from config import PACKAGING_FACTOR
     u = WEIGHT_UNITS[unit_key]
     grams_total = qty * u["grams"]
-    gross_kg = grams_total / 1000.0
-    pure_kg = gross_kg * u.get("purity", 0.9999)
-    return {"gross_kg": round(gross_kg, 4), "pure_kg": round(pure_kg, 4)}
+    net_kg = grams_total / 1000.0
+    pure_kg = net_kg * u.get("purity", 0.9999)
+    packed_kg = net_kg * PACKAGING_FACTOR
+    return {"gross_kg": round(packed_kg, 4),      # billable weight
+            "net_kg": round(net_kg, 4),           # metal only
+            "pure_kg": round(pure_kg, 4),
+            "packaging_kg": round(packed_kg - net_kg, 4)}
 
 
 def _cheapest_carrier(dest_code, value_usd, tier):
@@ -131,19 +141,20 @@ def analyze(
             transit_h = fr["transit_h"] * tmult
 
             if service == "door_to_door":
-                # all-inclusive: freight + inland transport + guard + insurance
+                # all-inclusive freight + inland + guard + cargo insurance,
+                # BUT war-risk premium is charged separately (0.1% of value).
                 lm_cost = 0.0
                 lm_km = DEST_POINTS[dest_code]["souk_km"]
                 sec_cost = 0.0
                 cargo_cost = 0.0
-                war_cost = 0.0
+                war_cost = ins_war["war_usd"]
                 carrier = "INCLUDED"
             else:  # door_to_airport → add flat inland secure leg ($95 all-in)
                 lm_cost = INLAND_SECURE_FLAT_USD
                 lm_km = DEST_POINTS[dest_code]["souk_km"]
                 sec_cost = 0.0
                 cargo_cost = 0.0
-                war_cost = 0.0
+                war_cost = ins_war["war_usd"]
                 carrier = "FLAT95"
         else:
             # ── SEA / MULTIMODAL: live Freightos + 3-tier model ──
