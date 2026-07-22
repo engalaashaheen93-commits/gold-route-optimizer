@@ -31,11 +31,13 @@ CUSTOMS = {
 }
 
 # geopolitical corridor score 0..1 (higher = riskier) + war-risk premium %
+# war-risk insurance = 0.1% of shipment value (real market rate, flat).
+# geo scores are kept only for hazard flagging, NOT for the war premium.
 CORRIDOR = {
-    "PVG": {"geo": 0.20, "war": 0.0004},
-    "HKG": {"geo": 0.18, "war": 0.0003},
-    "SIN": {"geo": 0.12, "war": 0.0002},
-    "IST": {"geo": 0.45, "war": 0.0012},   # closer to conflict zones
+    "PVG": {"geo": 0.20, "war": 0.0010},
+    "HKG": {"geo": 0.18, "war": 0.0010},
+    "SIN": {"geo": 0.12, "war": 0.0010},
+    "IST": {"geo": 0.45, "war": 0.0010},
 }
 
 CITY_COORDS = {
@@ -192,7 +194,7 @@ def get_security(origin_code: str, escort: bool, value_usd: float) -> dict:
 def get_insurance(value_usd: float, full_cover: bool, origin_code: str) -> dict:
     cargo_rate = 0.0018 if full_cover else 0.0010
     cargo = value_usd * cargo_rate
-    war_rate = CORRIDOR.get(origin_code, {}).get("war", 0.0015)
+    war_rate = CORRIDOR.get(origin_code, {}).get("war", 0.0010)
     war = value_usd * war_rate
     return {"cargo_usd": round(cargo, 2), "war_usd": round(war, 2), "war_rate": war_rate}
 
@@ -209,6 +211,6 @@ def get_geopolitical(origin_code: str) -> dict:
 # PORT WAITING  (Dubai side)
 # ══════════════════════════════════════════════════════════════════
 def get_port_wait(port_code: str) -> dict:
-    waits = {"JEA": 6, "RAS": 3, "HAM": 4, "DXB": 1}
+    waits = {"JEA": 6, "HAM": 4, "DXB": 1}
     h = waits.get(port_code, 4) * random.uniform(0.8, 1.3)
     return {"wait_h": round(h, 1)}
