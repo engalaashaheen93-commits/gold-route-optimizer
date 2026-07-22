@@ -502,21 +502,23 @@ def _render_comparison(feasible):
 
 
 def _render_radar(feasible):
-    cats_keys = ["freight", "transit", "security_item", "customs_item", "weather", "war_risk_ins"]
+    cats_keys = ["total", "transit", "war_risk_ins", "weather", "hz_geo"]
     cats = [t(k, LANG) for k in cats_keys]
     fig = go.Figure()
     palette = ["#C9A24B", "#8B2635", "#E8C874", "#A84860"]
     fills = ["rgba(201,162,75,0.20)", "rgba(139,38,53,0.20)",
              "rgba(232,200,116,0.16)", "rgba(168,72,96,0.18)"]
+    # scale each axis by the worst value across the shown routes
+    mx = {k: max(rr["metrics"][k] for rr in feasible[:4]) or 1
+          for k in ("total_cost", "transit_time", "war_risk", "weather_risk", "geopolitical")}
     for i, r in enumerate(feasible[:4]):
         m = r["metrics"]
         norm = [
-            1 - min(m["shipping_cost"] / 400000, 1),
-            1 - min(m["transit_time"] / 600, 1),
-            1 - min(m["security"] / 10000, 1),
-            1 - min(m["customs"] / 60000, 1),
-            1 - min(m["weather_risk"] / 5000, 1),
-            1 - min(m["war_risk"] / 20000, 1),
+            1 - min(m["total_cost"] / mx["total_cost"], 1),
+            1 - min(m["transit_time"] / mx["transit_time"], 1),
+            1 - min(m["war_risk"] / mx["war_risk"], 1),
+            1 - min(m["weather_risk"] / mx["weather_risk"], 1),
+            1 - min(m["geopolitical"] / mx["geopolitical"], 1),
         ]
         fig.add_trace(go.Scatterpolar(
             r=norm + [norm[0]], theta=cats + [cats[0]], fill="toself",
