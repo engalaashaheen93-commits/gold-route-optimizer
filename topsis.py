@@ -63,7 +63,9 @@ def _assign_badges(ranked: list):
         return
     cheapest = min(ranked, key=lambda r: r["cost"]["total"])
     fastest = min(ranked, key=lambda r: r["transit_h"])
-    safest = min(ranked, key=lambda r: r["metrics"]["security"] + r["metrics"]["war_risk"])
+    safest = min(ranked, key=lambda r: (r["metrics"]["geopolitical"]
+                                        + r["metrics"]["weather_risk"]
+                                        + r["metrics"]["war_risk"]))
     for r in ranked:
         r["badges"] = []
     cheapest["badges"].append("cheapest")
