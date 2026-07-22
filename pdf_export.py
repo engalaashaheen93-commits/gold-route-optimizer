@@ -1,6 +1,6 @@
 """
 PDF report generator (English) for the ranked route analysis.
-"""
+""" 
 from fpdf import FPDF
 
 
