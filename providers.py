@@ -198,6 +198,7 @@ def get_insurance(value_usd: float, full_cover: bool, origin_code: str) -> dict:
     war = value_usd * war_rate
     return {"cargo_usd": round(cargo, 2), "war_usd": round(war, 2), "war_rate": war_rate}
 
+
 # ══════════════════════════════════════════════════════════════════
 # GEOPOLITICAL
 # ══════════════════════════════════════════════════════════════════
