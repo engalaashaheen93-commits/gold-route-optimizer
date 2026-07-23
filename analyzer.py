@@ -70,7 +70,10 @@ def analyze(
     urgency: str,
     carrier_mode: str = "auto",   # "auto" = try all & pick cheapest, or a specific key
     packaging: str = "standard",
-) -> List[Dict[str, Any]]:
+    ) -> List[Dict[str, Any]]:
+
+    import random as _random
+    _random.seed(42)
 
     w = compute_weight(qty, unit_key, packaging)
     gross_kg = max(w["gross_kg"], 0.001)
