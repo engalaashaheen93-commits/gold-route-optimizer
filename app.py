@@ -301,6 +301,12 @@ with tc1:
 with tc2:
     escort = st.toggle(t("escort", LANG), value=True)
 
+# ── Row 6: stated priority → AI-derived criterion weights ──
+st.markdown(f"##### 🧭 {t('priority_hdr',LANG)}")
+priority_text = st.text_area(
+    t("priority_label", LANG), value="", height=80,
+    placeholder=t("priority_ph", LANG), help=t("priority_help", LANG))
+
 analyze_clicked = st.button(t("analyze", LANG), type="primary", use_container_width=True)
 
 
@@ -460,6 +466,9 @@ def render_results(ranked):
     _render_score_stack(feasible)
 
     # ---- robustness / sensitivity ----
+    # ---- AI-derived weights (only when a priority was stated) ----
+    _render_derived_weights()
+
     st.markdown(f"### 🛡️ {t('robust_hdr',LANG)}")
     _render_robustness(feasible)
 
@@ -584,6 +593,36 @@ def _render_topN(feasible, n=8):
     st.plotly_chart(fig, use_container_width=True)
 
 
+def _render_derived_weights():
+    """Show default vs AI-derived criterion weights, when a priority was given."""
+    wres = st.session_state.get("wres")
+    if not wres or wres.get("source") != "ai":
+        if wres and wres.get("error") == "invalid_reply":
+            st.info(t("weights_invalid", LANG))
+        return
+
+    import weight_elicitation
+    st.markdown(f"### 🧭 {t('weights_hdr',LANG)}")
+    if wres.get("rationale"):
+        st.markdown(
+            f"<div style='background:#241812;border-{'right' if RTL else 'left'}:4px solid #C9A24B;"
+            f"border-radius:8px;padding:12px 16px;margin:6px 0;color:#F0E6D2;font-size:13px;'>"
+            f"💬 {wres['rationale']}</div>", unsafe_allow_html=True)
+
+    rows = weight_elicitation.describe(wres, LANG)
+    LBL = {"total_cost": t("total", LANG), "transit_time": t("transit", LANG),
+           "geopolitical": t("hz_geo", LANG), "weather_risk": t("weather", LANG),
+           "war_risk": t("war_risk_ins", LANG)}
+    ARROW = {"^": "🔺", "v": "🔻", "=": "▪️"}
+    head = (f"| {t('criterion_col',LANG)} | {t('weights_default',LANG)} | "
+            f"{t('weights_derived',LANG)} | |\n|---|---:|---:|:--:|\n")
+    body_rows = "".join(
+        f"| {LBL.get(r['criterion'], r['criterion'])} | {r['default_pct']}% | "
+        f"**{r['derived_pct']}%** | {ARROW[r['direction']]} |\n" for r in rows)
+    st.markdown(head + body_rows)
+    st.caption(t("weights_note", LANG))
+
+
 def _render_robustness(feasible):
     """Sensitivity analysis: does the recommendation survive perturbation?"""
     import sensitivity
@@ -675,9 +714,13 @@ def _render_score_stack(feasible, n=8):
 # ══════════════════════════════════════════════════════════════════
 if analyze_clicked:
     with st.spinner("..."):
+        import weight_elicitation
+        wres = weight_elicitation.derive(priority_text)
         ranked = analyze(origin_code, value_usd, qty, unit_key,
-                         escort, full_ins, urgency, carrier_mode, packaging)
+                         escort, full_ins, urgency, carrier_mode, packaging,
+                         weights_override=(wres["weights"] if wres["source"] == "ai" else None))
     st.session_state.ranked = ranked
+    st.session_state.wres = wres
 
 if "ranked" in st.session_state:
     render_results(st.session_state.ranked)
