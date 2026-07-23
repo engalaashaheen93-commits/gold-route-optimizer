@@ -70,10 +70,8 @@ def analyze(
     urgency: str,
     carrier_mode: str = "auto",   # "auto" = try all & pick cheapest, or a specific key
     packaging: str = "standard",
-    ) -> List[Dict[str, Any]]:
-
-    import random as _random
-    _random.seed(42)
+    weights_override: dict | None = None,
+) -> List[Dict[str, Any]]:
 
     w = compute_weight(qty, unit_key, packaging)
     gross_kg = max(w["gross_kg"], 0.001)
@@ -247,7 +245,7 @@ def analyze(
         for dc in sea_points:
             options.append(build("sea", dc, transit=hub))
 
-    ranked = run_topsis(options)
+    ranked = run_topsis(options, weights_override)
     for r in ranked:
         r["confidence"] = confidence_score(r)
     # keep the meaningful top set for display (all still available)
