@@ -185,6 +185,103 @@ def generate_pdf(ranked: list, meta: dict) -> bytes:
         pdf.cell(0, 6, f"{r['cc_score']:.3f}", border=1, align="R", ln=True)
 
     pdf.ln(6)
+    # ── Robustness / sensitivity analysis ──
+    try:
+        import sensitivity as _sens
+        _s = _sens.analyse(feasible)
+        _m = _sens.margin_analysis(feasible)
+        _be = _sens.breakeven_cost(feasible)
+    except Exception:
+        _s = None
+
+    if _s and _s.get("total_scenarios"):
+        pdf.add_page()
+        pdf.set_font("Helvetica", "B", 12)
+        pdf.set_text_color(139, 38, 53)
+        pdf.cell(0, 8, "Decision Robustness (Sensitivity Analysis)", ln=True)
+        pdf.set_text_color(30, 30, 30)
+        pdf.set_font("Helvetica", "", 9)
+        pdf.set_x(pdf.l_margin)
+        pdf.multi_cell(0, 5,
+            "External validation against historical expert decisions was not possible, as no "
+            "accessible log of past shipping choices exists. Robustness analysis provides an "
+            "internal alternative: instead of asking whether the decision is correct, it asks "
+            "whether it is STABLE. The ranking is recomputed under systematically perturbed "
+            "conditions, and the share of scenarios in which the recommended route remains "
+            "first is reported below.")
+        pdf.ln(2)
+
+        pdf.set_x(pdf.l_margin)
+        pdf.set_font("Helvetica", "B", 11)
+        pdf.multi_cell(0, 7,
+            f"The recommended route stayed first in {_s['wins']} of "
+            f"{_s['total_scenarios']} scenarios  ({_s['robustness_pct']}%) - "
+            f"{_s['verdict'].upper()}")
+        pdf.ln(1)
+
+        # per-family table
+        pdf.set_font("Helvetica", "B", 8)
+        pdf.set_fill_color(26, 37, 53)
+        pdf.set_text_color(255, 255, 255)
+        pdf.set_x(pdf.l_margin)
+        pdf.cell(70, 6, "Perturbation family", border=1, fill=True)
+        pdf.cell(35, 6, "Scenarios", border=1, fill=True, align="C")
+        pdf.cell(35, 6, "Stayed first", border=1, fill=True, align="C")
+        pdf.cell(0, 6, "Share", border=1, fill=True, align="R", ln=True)
+        pdf.set_text_color(30, 30, 30)
+        pdf.set_font("Helvetica", "", 8)
+        FAM = {"weights": "Criterion weights +/-10%, +/-20%",
+               "cost": "Total cost +/-10%, +/-20%",
+               "time": "Transit time +/-10%, +/-20%"}
+        for fam, lbl in FAM.items():
+            d = _s["by_family"].get(fam)
+            if not d:
+                continue
+            pdf.set_x(pdf.l_margin)
+            pdf.cell(70, 6, lbl, border=1)
+            pdf.cell(35, 6, str(d["total"]), border=1, align="C")
+            pdf.cell(35, 6, str(d["wins"]), border=1, align="C")
+            pdf.cell(0, 6, f"{d['pct']}%", border=1, align="R", ln=True)
+        pdf.ln(3)
+
+        # margin + break-even
+        pdf.set_x(pdf.l_margin)
+        pdf.set_font("Helvetica", "B", 10)
+        pdf.cell(0, 6, "Margin over the runner-up", ln=True)
+        pdf.set_font("Helvetica", "", 9)
+        if _m:
+            pdf.set_x(pdf.l_margin)
+            pdf.multi_cell(0, 5,
+                f"Score {_m['score_first']:.4f} vs {_m['score_second']:.4f} "
+                f"(gap {_m['score_gap']:.4f}); the runner-up costs "
+                f"${_m['cost_gap']:,.0f} more and takes {_m['time_gap']:.0f}h longer. "
+                + ("The gap is decisive."
+                   if _m["decisive"] else
+                   "The gap is narrow, so the top two routes are near-equivalent and the "
+                   "choice between them may reasonably rest on factors outside the model."))
+        if _be:
+            pdf.set_x(pdf.l_margin)
+            pdf.multi_cell(0, 5,
+                f"Break-even: the recommended route keeps first place until its own total "
+                f"cost rises by approximately {(_be-1)*100:.0f}%.")
+        else:
+            pdf.set_x(pdf.l_margin)
+            pdf.multi_cell(0, 5,
+                "Break-even: the recommended route holds first place across the entire "
+                "tested cost range.")
+
+        if _s["flips"]:
+            pdf.ln(2)
+            pdf.set_x(pdf.l_margin)
+            pdf.set_font("Helvetica", "B", 10)
+            pdf.cell(0, 6, f"Scenarios that changed the winner ({len(_s['flips'])})", ln=True)
+            pdf.set_font("Helvetica", "", 8)
+            for f in _s["flips"][:15]:
+                pdf.set_x(pdf.l_margin)
+                pdf.multi_cell(0, 5,
+                    f"  {f['scenario']}  ->  {f['new_winner']} "
+                    f"(${f['new_cost']:,.0f}, {f['new_time']:.0f}h)")
+
     # ── How each route earned its score (per-criterion breakdown) ──
     pdf.add_page()
     pdf.set_font("Helvetica", "B", 12)
