@@ -7,7 +7,7 @@ import requests
 from config import APP_MODE, OPENWEATHER_API_KEY
 
 TIMEOUT = 8
-random.seed(42)  # fixed seed for reproducibility (thesis requirement)
+random.seed()   # real variance each run
 
 # ══════════════════════════════════════════════════════════════════
 # BASE FREIGHT TABLE  (origin → Dubai)  — USD per kg (air) / per kg (sea)
