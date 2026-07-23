@@ -8,8 +8,15 @@ from config import TOPSIS_WEIGHTS
 CRITERIA = list(TOPSIS_WEIGHTS.keys())
 
 
-def run_topsis(options: list) -> list:
-    """Rank options (each has ['metrics'] dict). Returns sorted list, best first."""
+def run_topsis(options: list, weights_override: dict | None = None) -> list:
+    """
+    Rank options (each has ['metrics'] dict). Returns sorted list, best first.
+
+    weights_override lets a caller supply a different weight vector — used when
+    the weights are derived from the user's stated priority rather than taken
+    from the defaults. It must contain every criterion and sum to 1.
+    """
+    W = weights_override if weights_override else TOPSIS_WEIGHTS
     if not options:
         return []
     if len(options) == 1:
@@ -31,7 +38,7 @@ def run_topsis(options: list) -> list:
                    for i in range(len(matrix))]
 
     # 3) weighted
-    weights = [TOPSIS_WEIGHTS[c] for c in CRITERIA]
+    weights = [W[c] for c in CRITERIA]
     weighted = [[norm_matrix[i][j] * weights[j] for j in range(len(CRITERIA))]
                 for i in range(len(matrix))]
 
@@ -64,8 +71,8 @@ def run_topsis(options: list) -> list:
             detail[cname] = {
                 "raw": raw,
                 "score": round(rel, 4),                       # 0..1, higher = better
-                "weight": TOPSIS_WEIGHTS[cname],
-                "weighted": round(rel * TOPSIS_WEIGHTS[cname], 4),
+                "weight": W[cname],
+                "weighted": round(rel * W[cname], 4),
                 "best": lo, "worst": hi,
             }
         opt["criteria_detail"] = detail
