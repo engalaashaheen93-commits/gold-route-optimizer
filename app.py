@@ -459,6 +459,10 @@ def render_results(ranked):
     st.markdown(f"### 🎯 {t('chart_score',LANG)}")
     _render_score_stack(feasible)
 
+    # ---- robustness / sensitivity ----
+    st.markdown(f"### 🛡️ {t('robust_hdr',LANG)}")
+    _render_robustness(feasible)
+
     # ---- export ----
     st.markdown("---")
     try:
@@ -578,6 +582,63 @@ def _render_topN(feasible, n=8):
         xaxis=dict(title=t("total", LANG) + " (USD)", gridcolor="#3D2419"),
         yaxis=dict(automargin=True))
     st.plotly_chart(fig, use_container_width=True)
+
+
+def _render_robustness(feasible):
+    """Sensitivity analysis: does the recommendation survive perturbation?"""
+    import sensitivity
+    s = sensitivity.analyse(feasible)
+    if not s.get("total_scenarios"):
+        return
+    m = sensitivity.margin_analysis(feasible)
+    be = sensitivity.breakeven_cost(feasible)
+
+    pct = s["robustness_pct"]
+    colour = ("#2E7D32" if s["verdict"] == "high"
+              else "#C9A24B" if s["verdict"] == "moderate" else "#8B2635")
+    verdict_txt = t(f"robust_{s['verdict']}", LANG)
+
+    st.markdown(
+        f"<div style='background:#241812;border:1px solid {colour};border-radius:12px;"
+        f"padding:16px 18px;margin:8px 0;'>"
+        f"<div style='color:#E8C874;font-size:30px;font-weight:800;'>{pct}%</div>"
+        f"<div style='color:#F0E6D2;font-size:14px;margin-bottom:6px;'>"
+        f"{t('robust_line',LANG).format(wins=s['wins'], total=s['total_scenarios'])}</div>"
+        f"<div style='color:{colour};font-weight:700;font-size:13px;'>{verdict_txt}</div>"
+        f"</div>", unsafe_allow_html=True)
+
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        st.metric(t("robust_weights", LANG),
+                  f"{s['by_family'].get('weights',{}).get('pct',0)}%")
+    with c2:
+        st.metric(t("robust_cost", LANG),
+                  f"{s['by_family'].get('cost',{}).get('pct',0)}%")
+    with c3:
+        st.metric(t("robust_time", LANG),
+                  f"{s['by_family'].get('time',{}).get('pct',0)}%")
+
+    # margin vs runner-up + break-even headroom
+    bits = []
+    if m:
+        bits.append(t("margin_line", LANG).format(
+            gap=f"{m['score_gap']:.4f}", cost=f"${m['cost_gap']:,.0f}",
+            time=f"{m['time_gap']:.0f}"))
+        if not m["decisive"]:
+            bits.append(t("margin_thin", LANG))
+    if be:
+        bits.append(t("breakeven_line", LANG).format(pct=f"{(be-1)*100:.0f}"))
+    else:
+        bits.append(t("breakeven_none", LANG))
+    st.caption(" · ".join(bits))
+
+    if s["flips"]:
+        with st.expander(t("robust_flips", LANG).format(n=len(s["flips"]))):
+            for f in s["flips"][:12]:
+                st.markdown(
+                    f"- **{f['scenario']}** → {f['new_winner']} "
+                    f"(${f['new_cost']:,.0f} · {f['new_time']:.0f}h)")
+    st.caption(t("robust_note", LANG))
 
 
 def _render_score_stack(feasible, n=8):
