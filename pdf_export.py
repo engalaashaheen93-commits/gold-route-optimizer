@@ -5,6 +5,10 @@ from fpdf import FPDF
 
 
 def generate_pdf(ranked: list, meta: dict) -> bytes:
+    weights = meta.get("weights") or {}
+    def wpct(key):
+        return f"{weights.get(key, 0) * 100:.0f}%" if weights else "-"
+
     feasible = [r for r in ranked if r.get("feasible", True)]
     best = feasible[0]
 
