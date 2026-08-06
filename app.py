@@ -495,7 +495,8 @@ def render_results(ranked):
                            file_name="gold_route_report.pdf", mime="application/pdf")
         st.caption(t("export_note", LANG))
     except Exception as e:
-        st.caption(f"PDF: {e}")
+        import traceback
+        st.code(traceback.format_exc())
 
     # precious-metals cost-structure note
     st.markdown(
