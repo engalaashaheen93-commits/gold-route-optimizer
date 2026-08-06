@@ -14,7 +14,7 @@ def build_recommendation(ranked: list, lang: str) -> str:
             client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
             prompt = _make_prompt(ranked, lang)
             msg = client.messages.create(
-                model="claude-sonnet-4-6",
+                model="claude-sonnet-5",
                 max_tokens=500,
                 messages=[{"role": "user", "content": prompt}],
             )
