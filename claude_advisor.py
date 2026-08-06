@@ -18,7 +18,9 @@ def build_recommendation(ranked: list, lang: str, wres: dict = None) -> str:
                 max_tokens=500,
                 messages=[{"role": "user", "content": prompt}],
             )
-            return msg.content[0].text
+            text_block = next((b for b in msg.content if b.type == "text"), None)
+            if text_block:
+                return text_block.text
         except Exception:
             pass
     return _fallback(ranked, lang)
