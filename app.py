@@ -473,9 +473,13 @@ def render_results(ranked):
     _render_robustness(feasible)
 
     # ---- export ----
-    st.markdown("---")
+   st.markdown("---")
     try:
         from pdf_export import generate_pdf
+        wres_for_pdf = st.session_state.get("wres", {})
+        active_weights_for_pdf = (wres_for_pdf["weights"]
+                                  if wres_for_pdf.get("source") == "ai"
+                                  else None)
         pdf = generate_pdf(ranked, {
             "origin": name_of(best["origin"], "en"),
             "port": name_of(best["port"], "en"),
@@ -484,8 +488,8 @@ def render_results(ranked):
                         if best["carrier"] in SECURE_CARRIERS
                         else ("All-inclusive (Door-to-Door)" if best.get("service") == "door_to_door"
                               else "Door-to-Airport + inland secure leg")),
-            "value_usd": value_usd,
-            "depart": str(depart), "arrive": str(arrive),
+            "value_usd": value_usd, "depart": str(depart), "arrive": str(arrive),
+            "weights": active_weights_for_pdf,
         })
         st.download_button(t("export_pdf", LANG), data=pdf,
                            file_name="gold_route_report.pdf", mime="application/pdf")
