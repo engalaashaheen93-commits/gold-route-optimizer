@@ -125,7 +125,7 @@ def derive(text: str) -> dict:
         import anthropic
         client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
         msg = client.messages.create(
-            model="claude-sonnet-4-6",
+            model="claude-sonnet-5",
             max_tokens=400,
             messages=[{"role": "user", "content": _prompt(text)}],
         )
