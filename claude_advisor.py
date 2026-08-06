@@ -5,14 +5,14 @@ Uses Claude API when a key is set; otherwise a bilingual rule-based fallback.
 from config import ANTHROPIC_API_KEY, name_of
 
 
-def build_recommendation(ranked: list, lang: str) -> str:
+def build_recommendation(ranked: list, lang: str, wres: dict = None) -> str:
     best = ranked[0]
     # try Claude
     if ANTHROPIC_API_KEY:
         try:
             import anthropic
             client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
-            prompt = _make_prompt(ranked, lang)
+            prompt = _make_prompt(ranked, lang, wres)
             msg = client.messages.create(
                 model="claude-sonnet-5",
                 max_tokens=500,
@@ -24,7 +24,7 @@ def build_recommendation(ranked: list, lang: str) -> str:
     return _fallback(ranked, lang)
 
 
-def _make_prompt(ranked, lang):
+def _make_prompt(ranked, lang, wres=None):
     best = ranked[0]
     lines = []
     for r in ranked[:4]:
@@ -38,7 +38,12 @@ def _make_prompt(ranked, lang):
     return (f"You are a logistics advisor for precious-metals shipping to Dubai. "
             f"In {langname}, write a concise 3-4 sentence recommendation explaining why the "
             f"top route was chosen over the alternatives. Be specific about cost, time and risk.\n\n"
-            f"Ranked options:\n{tbl}\n\nRecommended: {name_of(best['origin'],'en')} via {best['mode']}.")
+            f"Ranked options:\n{tbl}\n\nRecommended: {name_of(best['origin'],'en')} via {best['mode']}."
+            + (f"\n\nIMPORTANT: The decision-maker stated this priority for this specific "
+               f"shipment: \"{wres.get('rationale','')}\". The ranking above uses CUSTOM "
+               f"weights derived from that stated priority, not the default weights. "
+               f"Explicitly reference this stated priority in your explanation."
+               if wres and wres.get("source") == "ai" else ""))
 
 
 def _fallback(ranked, lang):
