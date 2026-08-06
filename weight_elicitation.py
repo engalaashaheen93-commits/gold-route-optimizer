@@ -129,7 +129,10 @@ def derive(text: str) -> dict:
             max_tokens=400,
             messages=[{"role": "user", "content": _prompt(text)}],
         )
-        reply = msg.content[0].text.strip()
+        text_block = next((b for b in msg.content if b.type == "text"), None)
+        if text_block is None:
+            raise ValueError("no text block in response")
+        reply = text_block.text.strip()
         # strip accidental code fences
         if reply.startswith("```"):
             reply = reply.split("```")[1]
