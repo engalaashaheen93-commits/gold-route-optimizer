@@ -423,7 +423,8 @@ def render_results(ranked):
 
     # ---- AI recommendation ----
     st.markdown(f"### 🧠 {t('recommendation',LANG)}")
-    rec = build_recommendation(ranked, LANG).replace("$", "&#36;")
+    wres_for_rec = st.session_state.get("wres") or {}
+    rec = build_recommendation(ranked, LANG, wres_for_rec).replace("$", "&#36;")
     st.markdown(f"<div style='background:#241812;border-{'right' if RTL else 'left'}:4px solid #C9A24B;"
                 f"border-radius:8px;padding:14px 18px;'>{rec}</div>", unsafe_allow_html=True)
 
