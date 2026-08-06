@@ -473,7 +473,7 @@ def render_results(ranked):
     _render_robustness(feasible)
 
     # ---- export ----
-   st.markdown("---")
+    st.markdown("---")
     try:
         from pdf_export import generate_pdf
         wres_for_pdf = st.session_state.get("wres", {})
