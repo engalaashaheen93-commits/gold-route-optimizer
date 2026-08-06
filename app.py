@@ -476,7 +476,7 @@ def render_results(ranked):
     st.markdown("---")
     try:
         from pdf_export import generate_pdf
-        wres_for_pdf = st.session_state.get("wres", {})
+        wres_for_pdf = st.session_state.get("wres") or {}
         active_weights_for_pdf = (wres_for_pdf["weights"]
                                   if wres_for_pdf.get("source") == "ai"
                                   else None)
