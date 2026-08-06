@@ -144,8 +144,8 @@ def derive(text: str) -> dict:
                 "rationale": str(parsed.get("rationale", ""))[:400],
                 "changed": changed, "error": None}
     except Exception as e:
+        print(f"WEIGHT_ELICITATION_ERROR: {type(e).__name__}: {e}")
         default["error"] = type(e).__name__
-        return default
 
 
 def describe(result: dict, lang: str = "en") -> list:
