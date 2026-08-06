@@ -717,8 +717,10 @@ if analyze_clicked:
         import weight_elicitation
         wres = weight_elicitation.derive(priority_text)
         ranked = analyze(origin_code, value_usd, qty, unit_key,
-                         escort, full_ins, urgency, carrier_mode, packaging,
-                         weights_override=(wres["weights"] if wres and wres.get("source") == "ai" else None)
+                      escort=escort, full_insurance=full_ins,
+                      urgency=urgency, carrier_mode=carrier_mode,
+                      packaging=packaging,
+                      weights_override=(wres["weights"] if wres and wres.get("source") == "ai" else None))
     st.session_state.ranked = ranked
     st.session_state.wres = wres
 
