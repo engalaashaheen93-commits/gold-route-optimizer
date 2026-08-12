@@ -1,6 +1,6 @@
 """
 TOPSIS — Technique for Order of Preference by Similarity to Ideal Solution.
-All 9 criteria are 'cost' type (lower is better).
+All 5 criteria are 'cost' type (lower is better).
 """
 import math
 from config import TOPSIS_WEIGHTS
