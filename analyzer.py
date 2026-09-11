@@ -73,6 +73,15 @@ def analyze(
     weights_override: dict | None = None,
 ) -> List[Dict[str, Any]]:
 
+    # ── Reproducibility: fix the random seed at the start of EVERY analysis ──
+    # Some cost components (e.g. the fallback sea-freight estimate and port
+    # waiting hours in providers.py) apply a small random market-variance factor.
+    # Reseeding here to a fixed value makes that variance identical on every run,
+    # so the same inputs always produce the same TOPSIS score — a requirement for
+    # any figure quoted in the thesis (see thesis §2.2.11, reproducibility).
+    import random as _random
+    _random.seed(42)
+
     w = compute_weight(qty, unit_key, packaging)
     gross_kg = max(w["gross_kg"], 0.001)
     o = ORIGINS[origin_code]
