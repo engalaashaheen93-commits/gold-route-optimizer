@@ -392,7 +392,7 @@ T = {
 
     "shipment":        {"en": "Shipment Details",                "ar": "بيانات الشحنة"},
     "origin":          {"en": "Origin",                          "ar": "مصدر الشحنة"},
-    "destination":     {"en": "Dubai Destination Port",          "ar": "ميناء الوصول في دبي"},
+    "destination":     {"en": "Dubai Destination Port",          "ar": "ميناء الوصول في الإمارات العربية المتحدة"},
     "metal":           {"en": "Metal",                           "ar": "المعدن"},
     "weight_qty":      {"en": "Quantity",                        "ar": "الكمية"},
     "weight_unit":     {"en": "Unit",                            "ar": "الوحدة"},
@@ -499,7 +499,7 @@ T = {
     "risk_high":       {"en": "High",                           "ar": "مرتفع"},
 
     "data_sources":    {"en": "Data Sources",                   "ar": "مصادر البيانات"},
-    "live":            {"en": "LIVE",                           "ar": "حيّ"},
+    "live":            {"en": "LIVE",                           "ar": "مباشر"},
     "estimated":       {"en": "Estimated",                      "ar": "تقديري"},
     "src_metals":      {"en": "Metal Prices",                   "ar": "أسعار المعادن"},
     "src_weather":     {"en": "Weather",                        "ar": "الطقس"},
@@ -560,10 +560,10 @@ T = {
     "auto_cheapest":   {"en": "Auto (cheapest carrier)",        "ar": "تلقائي (الأوفر)"},
     "via_hub":         {"en": "via",                            "ar": "عبر"},
     "direct":          {"en": "Direct",                         "ar": "مباشر"},
-    "routes_compared": {"en": "routes compared",                "ar": "مسار تمت مقارنته"},
+    "routes_compared": {"en": "routes compared",                "ar": "مساراً تمت مقارنتها"},
     "svc_d2d":         {"en": "Door-to-Door",                   "ar": "من الباب للباب"},
     "svc_d2a":         {"en": "Door-to-Airport",                "ar": "من الباب للمطار"},
-    "svc_included":    {"en": "all-inclusive",                  "ar": "شامل كل شي"},
+    "svc_included":    {"en": "all-inclusive",                  "ar": "شامل كل الخدمات"},
     "svc_flat":        {"en": "+ inland secure leg",            "ar": "+ نقل داخلي آمن"},
 
     # verdict banner
@@ -576,12 +576,12 @@ T = {
     "report_all":      {"en": "Full Report — All Options Analysed",
                         "ar": "التقرير الكامل — دراسة كل الخيارات"},
     "not_chosen":      {"en": "Alternatives not selected by the AI",
-                        "ar": "البدائل التي لم يخترها الذكاء الاصطناعي"},
+                        "ar": "البدائل غير المختارة"},
     "pm_note":         {"en": "Note: base freight is inherently low for small, high-value parcels; "
                               "the bulk of the cost lies in insurance and security — a defining "
                               "characteristic of precious-metals logistics.",
                         "ar": "ملاحظة: تكلفة الشحن الأساسية منخفضة بطبيعتها للطرود الصغيرة عالية القيمة؛ "
-                              "الجزء الأكبر من التكلفة يقع في التأمين والأمان — وهي خصيصة المعادن الثمينة."},
+                              "الجزء الأكبر من التكلفة يقع في التأمين والأمان — وهي سمة مميزة لشحن المعادن الثمينة."},
 
     # hazards
     "hazards":         {"en": "Risk Alerts",                    "ar": "تنبيهات المخاطر"},
